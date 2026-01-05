@@ -3,15 +3,215 @@ const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
 const http = require('http');
 const { Server } = require('socket.io');
+const { v4: uuidv4 } = require('uuid');
 
 // ============================================
-// PHASE 1: MULTI-TENANT SERVER APIs
-// Add these routes to your existing server.js
+// INITIALIZE APP & SERVER
 // ============================================
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    }
+});
+const PORT = process.env.PORT || 3000;
 
 // ============================================
+// INITIALIZE SUPABASE
+// ============================================
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+if (SUPABASE_URL && SUPABASE_KEY) {
+    console.log("✅ Supabase credentials loaded successfully");
+} else {
+    console.error("❌ Missing Supabase credentials! Check Environment Variables.");
+    process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Test connectivity
+(async () => {
+    const { data, error } = await supabase.from('restaurants').select('*').limit(1);
+    if (error) {
+        console.error("❌ Supabase test query failed:", error.message);
+    } else {
+        console.log("✅ Supabase connected successfully");
+    }
+})();
+
+// ============================================
+// MIDDLEWARE
+// ============================================
+app.use(express.json());
+app.use(express.static('public'));
+
+// ============================================
+// HEALTH CHECK
+// ============================================
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        connections: io.engine.clientsCount
+    });
+});
+
+// ============================================
+// WHATSAPP MESSAGE FUNCTION
+// ============================================
+async function sendWhatsAppMessage(recipientPhone, message) {
+    try {
+        const formattedPhone = recipientPhone.replace(/[^0-9]/g, '');
+        
+        const response = await axios.post(
+            `https://graph.facebook.com/v24.0/${process.env.META_PHONE_ID}/messages`,
+            {
+                messaging_product: 'whatsapp',
+                to: formattedPhone,
+                type: 'text',
+                text: { body: message }
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.META_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        
+        console.log(`✅ WhatsApp sent to ${formattedPhone}`);
+        return { success: true, messageId: response.data.messages[0].id };
+        
+    } catch (error) {
+        console.error('❌ WhatsApp send failed:', error.response?.data || error.message);
+        return { success: false, error: error.message };
+    }
+}
+
+// ============================================
+// STATUS MESSAGE HELPER
+// ============================================
+function getStatusMessage(status, orderNumber) {
+    const messages = {
+        'new': 
+            `📝 *Order Received* #${orderNumber}\n\n` +
+            `We've received your order!`,
+        'confirmed': 
+            `✅ *Order Confirmed* #${orderNumber}\n\n` +
+            `Your order has been confirmed and sent to the kitchen!\n\n` +
+            `We'll notify you when it's ready.`,
+        'preparing': 
+            `👨‍🍳 *Preparing Your Order* #${orderNumber}\n\n` +
+            `Our chefs are cooking your meal right now!\n\n` +
+            `Estimated time: 15-20 minutes`,
+        'ready': 
+            `🎉 *Order Ready for Pickup!* #${orderNumber}\n\n` +
+            `Your order is ready!\n\n` +
+            `📍 Please collect within 15 minutes\n\n` +
+            `See you soon!`,
+        'out_for_delivery': 
+            `🚗 *Out for Delivery* #${orderNumber}\n\n` +
+            `Your order is on the way!\n\n` +
+            `Estimated arrival: 20-30 minutes`,
+        'completed': 
+            `✅ *Order Completed* #${orderNumber}\n\n` +
+            `Thank you for your order! 🙏\n\n` +
+            `We hope you enjoyed your meal.\n` +
+            `See you again soon!`,
+        'cancelled': 
+            `❌ *Order Cancelled* #${orderNumber}\n\n` +
+            `Your order has been cancelled.\n\n` +
+            `If you have questions, please call us.`
+    };
+    
+    return messages[status] || `Order #${orderNumber} status: ${status}`;
+}
+
+// ============================================
+// LEGACY ENDPOINT - EXISTING SYSTEM
+// ============================================
+app.post('/api/orders', async (req, res) => {
+    const orderData = req.body; 
+    const orderNumber = "SM" + Math.floor(1000 + Math.random() * 9000);
+    const orderId = uuidv4();
+
+    const itemDetails = orderData.orderItems
+        .map(item => `${item.name} x${item.quantity}`)
+        .join('\n');
+    
+    const plainTextMessage = `*Order #${orderNumber}*\n\nItems:\n${itemDetails}\n\nTotal: ${orderData.totalAmount}\nType: ${orderData.orderType}`;
+    const whatsappUpdate = `✅ Order confirmed!\n\n*Order# ${orderNumber}*\n\nItems:\n${itemDetails}\n\nTotal: ${orderData.totalAmount}\nType: ${orderData.orderType}`;
+    
+    console.log("📝 Order id generated:", orderId);
+    console.log("📢 New order broadcast:", orderNumber);
+
+    try {
+        // Save to Supabase
+        const { data: savedOrder, error: dbError } = await supabase
+            .from('orders')
+            .insert([{ 
+                id: orderId,
+                order_number: orderNumber,
+                customer_name: orderData.customerName,
+                phone_number: orderData.phoneNumber,
+                user_input: orderData.userInput,
+                delivery_address: orderData.deliveryAddress,
+                order_source: orderData.orderType?.toLowerCase() || 'phone',
+                total_amount: orderData.totalAmount,
+                order_items: JSON.stringify(orderData.orderItems),
+                status: 'new'
+            }])
+            .select()
+            .single();
+
+        if (dbError) throw dbError;
+
+        // Broadcast to KDS
+        io.emit('new-kds-order', { 
+            id: orderId,
+            orderNumber, 
+            ...orderData, 
+            plainTextMessage
+        });
+
+        // Send to Trello (if configured)
+        if (process.env.TRELLO_KEY && process.env.TRELLO_TOKEN) {
+            await axios.post(
+                `https://api.trello.com/1/cards?key=${process.env.TRELLO_KEY}&token=${process.env.TRELLO_TOKEN}`, 
+                {
+                    idList: process.env.TRELLO_LIST_ID,
+                    name: `Order #${orderNumber} - ${orderData.customerName}`,
+                    desc: plainTextMessage
+                }
+            ).catch(err => console.error('Trello error:', err.message));
+        }
+
+        // Send WhatsApp confirmation
+        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
+            await sendWhatsAppMessage(orderData.phoneNumber, whatsappUpdate);
+        }
+
+        res.json({ success: true, orderNumber });
+
+    } catch (error) {
+        console.error("❌ Order error:", error.message);
+        res.status(200).json({ 
+            success: true, 
+            orderNumber, 
+            note: "Order sent to kitchen, but external automation had an issue." 
+        });
+    }
+});
+
+// ============================================
+// MULTI-TENANT RESTAURANT APIS
+// ============================================
+
 // 1. GET RESTAURANT INFO
-// ============================================
 app.get('/api/restaurants/:slug', async (req, res) => {
     try {
         const { slug } = req.params;
@@ -35,13 +235,11 @@ app.get('/api/restaurants/:slug', async (req, res) => {
     }
 });
 
-// ============================================
 // 2. GET FULL MENU (with categories)
-// ============================================
 app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const { available_only } = req.query; // Optional filter
+        const { available_only } = req.query;
         
         // Get categories
         const { data: categories, error: catError } = await supabase
@@ -60,7 +258,6 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
             .eq('restaurant_id', restaurantId)
             .order('display_order');
         
-        // Optionally filter to only available items
         if (available_only === 'true') {
             itemsQuery = itemsQuery.eq('is_available', true);
         }
@@ -91,9 +288,7 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
     }
 });
 
-// ============================================
 // 3. GET SINGLE MENU ITEM
-// ============================================
 app.get('/api/restaurants/:restaurantId/menu/:itemId', async (req, res) => {
     try {
         const { restaurantId, itemId } = req.params;
@@ -120,9 +315,7 @@ app.get('/api/restaurants/:restaurantId/menu/:itemId', async (req, res) => {
     }
 });
 
-// ============================================
 // 4. TOGGLE ITEM AVAILABILITY (Out of Stock)
-// ============================================
 app.patch('/api/restaurants/:restaurantId/menu/:itemId/availability', async (req, res) => {
     try {
         const { restaurantId, itemId } = req.params;
@@ -159,15 +352,12 @@ app.patch('/api/restaurants/:restaurantId/menu/:itemId/availability', async (req
     }
 });
 
-// ============================================
 // 5. UPDATE MENU ITEM
-// ============================================
 app.put('/api/restaurants/:restaurantId/menu/:itemId', async (req, res) => {
     try {
         const { restaurantId, itemId } = req.params;
         const { name, description, price, image_url, is_available, category_id } = req.body;
         
-        // Build update object (only include provided fields)
         const updates = {
             updated_at: new Date().toISOString()
         };
@@ -205,15 +395,12 @@ app.put('/api/restaurants/:restaurantId/menu/:itemId', async (req, res) => {
     }
 });
 
-// ============================================
 // 6. CREATE ORDER WITH SERVER-SIDE CALCULATIONS
-// ============================================
 app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
         const { customer_name, phone_number, order_type, items: orderItems, notes } = req.body;
         
-        // Validate input
         if (!customer_name || !phone_number || !orderItems || orderItems.length === 0) {
             return res.status(400).json({ 
                 error: 'Missing required fields: customer_name, phone_number, items' 
@@ -250,7 +437,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             });
         }
         
-        // Calculate order total using SERVER prices (not client prices)
+        // Calculate order total using SERVER prices
         let subtotal = 0;
         const calculatedItems = orderItems.map(orderItem => {
             const menuItem = menuItems.find(m => m.id === orderItem.id);
@@ -331,9 +518,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     }
 });
 
-// ============================================
-// 7. BULK UPDATE AVAILABILITY (Multiple items)
-// ============================================
+// 7. BULK UPDATE AVAILABILITY
 app.post('/api/restaurants/:restaurantId/menu/bulk-availability', async (req, res) => {
     try {
         const { restaurantId } = req.params;
@@ -371,9 +556,7 @@ app.post('/api/restaurants/:restaurantId/menu/bulk-availability', async (req, re
     }
 });
 
-// ============================================
 // 8. GET ORDER DETAILS
-// ============================================
 app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
     try {
         const { restaurantId, orderId } = req.params;
@@ -397,13 +580,11 @@ app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
     }
 });
 
-// ============================================
 // 9. SEARCH MENU ITEMS
-// ============================================
 app.get('/api/restaurants/:restaurantId/menu/search', async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const { q } = req.query; // search query
+        const { q } = req.query;
         
         if (!q || q.trim().length < 2) {
             return res.status(400).json({ error: 'Search query must be at least 2 characters' });
@@ -432,20 +613,16 @@ app.get('/api/restaurants/:restaurantId/menu/search', async (req, res) => {
     }
 });
 
-// ============================================
 // 10. GET RESTAURANT STATISTICS
-// ============================================
 app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
     try {
         const { restaurantId } = req.params;
         
-        // Get menu stats
         const { data: menuItems } = await supabase
             .from('menu_items')
             .select('is_available')
             .eq('restaurant_id', restaurantId);
         
-        // Get today's orders
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
@@ -483,224 +660,58 @@ app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
 });
 
 // ============================================
-// API DOCUMENTATION ENDPOINT
+// ORDER STATUS UPDATE LISTENER
 // ============================================
-app.get('/api/restaurants/:restaurantId/docs', (req, res) => {
-    res.json({
-        api_version: '1.0',
-        restaurant_id: req.params.restaurantId,
-        endpoints: {
-            menu: {
-                get_full_menu: 'GET /api/restaurants/:restaurantId/menu',
-                get_item: 'GET /api/restaurants/:restaurantId/menu/:itemId',
-                update_item: 'PUT /api/restaurants/:restaurantId/menu/:itemId',
-                toggle_availability: 'PATCH /api/restaurants/:restaurantId/menu/:itemId/availability',
-                bulk_availability: 'POST /api/restaurants/:restaurantId/menu/bulk-availability',
-                search: 'GET /api/restaurants/:restaurantId/menu/search?q=burger'
-            },
-            orders: {
-                create_order: 'POST /api/restaurants/:restaurantId/orders',
-                get_order: 'GET /api/restaurants/:restaurantId/orders/:orderId'
-            },
-            stats: {
-                get_stats: 'GET /api/restaurants/:restaurantId/stats'
-            }
-        }
-    });
-});
-const { v4: uuidv4 } = require('uuid');
-
-// ============================================
-// INITIALIZE APP & SERVER
-// ============================================
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST", "PUT"]
-    }
-});
-const PORT = process.env.PORT || 3000;
-/*
-// ============================================
-// INITIALIZE SUPABASE
-// ============================================
-const supabase = createClient(
-    process.env.SUPABASE_URL, 
-    process.env.SUPABASE_KEY
-);
-
-if (SUPABASE_URL && SUPABASE_KEY) {
-  console.log("✅ Supabase client initialized");
-  console.log("URL:", SUPABASE_URL);
-  console.log("Key prefix:", SUPABASE_KEY.substring(0, 6) + "..."); // only log part of the key
-} else {
-  console.error("❌ Supabase URL or Key missing");
-}
-**/
-// Load environment variables
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
-
-// Check if Supabase credentials are defined and non-empty
-if (SUPABASE_URL && SUPABASE_KEY) {
-    console.log("✅ Supabase credentials loaded successfully from Render Env.");
-} else {
-    console.error("❌ Missing or invalid Supabase credentials! Check Render Environment Variables.");
-    process.exit(1); // Exit the process if credentials are invalid
-}
-
-// Create Supabase client
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// ✅ Log URL and Key prefix
-
-// Optional connectivity check
-(async () => {
-  const { data, error } = await supabase.from('orders').select('*').limit(1);
-  if (error) {
-    console.error("❌ Supabase test query failed:", error.message);
-  } else {
-    console.log("✅ Supabase test query succeeded:", data);
-  }
-})();
-
-
-
-// ============================================
-// MIDDLEWARE
-// ============================================
-app.use(express.json());
-app.use(express.static('public'));
-
-// ============================================
-// HEALTH CHECK
-// ============================================
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'healthy', 
-        timestamp: new Date().toISOString(),
-        connections: io.engine.clientsCount
-    });
-});
-
-
-async function sendWhatsAppMessage(recipientPhone, message) {
-    try {
-        // Format phone number (remove any spaces or special chars)
-        const formattedPhone = recipientPhone.replace(/[^0-9]/g, '');
-        
-        // Meta WhatsApp Business API format
-        const response = await axios.post(
-            `https://graph.facebook.com/v24.0/${process.env.META_PHONE_ID}/messages`,
+if (supabase) {
+    console.log('📡 Setting up order status listener...');
+    
+    supabase
+        .channel('order_status_updates')
+        .on(
+            'postgres_changes',
             {
-                messaging_product: 'whatsapp',
-                to: formattedPhone,
-                type: 'text',
-                text: {
-                    body: message
-                }
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'orders'
             },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.META_ACCESS_TOKEN}`,
-                    'Content-Type': 'application/json'
+            async (payload) => {
+                const order = payload.new;
+                const oldOrder = payload.old;
+                
+                if (order.status !== oldOrder.status) {
+                    console.log(`📦 Order ${order.order_number} status: ${oldOrder.status} → ${order.status}`);
+                    
+                    const customerPhone = order.phone_number;
+                    const orderNumber = order.order_number;
+                    const newStatus = order.status;
+                    
+                    const statusMessage = getStatusMessage(newStatus, orderNumber);
+                    
+                    // Send WhatsApp notification
+                    if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
+                        await sendWhatsAppMessage(customerPhone, statusMessage);
+                    }
+                    
+                    // Broadcast to KDS
+                    io.emit('order_status_update', {
+                        id: order.id,
+                        orderNumber: orderNumber,
+                        status: newStatus,
+                        timestamp: new Date().toISOString()
+                    });
                 }
             }
-        );
-        
-        console.log(`✅ WhatsApp sent to ${formattedPhone}`);
-        return { success: true, messageId: response.data.messages[0].id };
-        
-    } catch (error) {
-        console.error('❌ WhatsApp send failed:', error.response?.data || error.message);
-        return { success: false, error: error.message };
-    }
+        )
+        .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('✅ Order status listener active');
+            }
+        });
 }
 
-
 // ============================================
-// NEW ENDPOINT - NODE.JS / SUPABASE
+// START SERVER
 // ============================================
-  app.post('/api/orders', async (req, res) => {
-   const orderData = req.body; 
-    const orderNumber = "SM" + Math.floor(1000 + Math.random() * 9000);
-    // Generate UUID yourself
-    const orderId = uuidv4();
-
-    const itemDetails = orderData.orderItems
-        .map(item => `${item.name} x${item.quantity}`)
-        .join('\n');
-    
-    const plainTextMessage = `*Order #${orderNumber}*\n\nItems:\n${itemDetails}\n\nTotal: ${orderData.totalAmount}\nType: ${orderData.orderType}`;
-    const whatsappUpdate = `✅ Order confirmed!\n\n*Order# ${orderNumber}*\n\nItems:\n${itemDetails}\n\nTotal: ${orderData.totalAmount}\nType: ${orderData.orderType}`;
-    
-    
-    
-    console.log("📝 Order id generated:", orderId);
-    console.log("📢 New order broadcast:", orderNumber);
-    console.log("📝 Order Data details list", orderData);
-
-
-    try {
-        // Save to Supabase
-        const { data: savedOrder, error: dbError } = await supabase
-            .from('orders')
-            .insert([{ 
-                id: orderId, // 👈 your UUID
-                order_number: orderNumber,
-                customer_name: orderData.customerName,
-                phone_number: orderData.phoneNumber,
-                user_input: orderData.userInput,
-                delivery_address: orderData.deliveryAddress,
-                order_source: orderData.orderType?.toLowerCase() || 'phone',
-                total_amount: orderData.totalAmount,
-                order_items: JSON.stringify(orderData.orderItems),
-                status: 'new'
-            }])
-            .select()
-            .single();
-
-        if (dbError) throw dbError;
-
-        // Broadcast to KDS - Legacy format
-
-        io.emit('new-kds-order', { 
-            id: orderId, // 👈 your UUID
-            orderNumber, 
-            ...orderData, 
-            plainTextMessage, 
-
-        });
-
-        // Send to Trello (if configured)
-        if (process.env.TRELLO_KEY && process.env.TRELLO_TOKEN) {
-            await axios.post(
-                `https://api.trello.com/1/cards?key=${process.env.TRELLO_KEY}&token=${process.env.TRELLO_TOKEN}`, 
-                {
-                    idList: process.env.TRELLO_LIST_ID,
-                    name: `Order #${orderNumber} - ${orderData.customerName}`,
-                    desc: plainTextMessage
-                }
-            ).catch(err => console.error('Trello error:', err.message));
-        }
-
-        // Send WhatsApp (if configured)
-        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
-            await sendWhatsAppMessage(orderData.phoneNumber, whatsappUpdate);
-        }
-
-        res.json({ success: true, orderNumber });
-
-    } catch (error) {
-        console.error("❌ Legacy order error:", error.message);
-        res.status(200).json({ 
-            success: true, 
-            orderNumber, 
-            note: "Order sent to kitchen, but external automation had an issue." 
-        });
-    }
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server running on port ${PORT}`);
 });
-
-
