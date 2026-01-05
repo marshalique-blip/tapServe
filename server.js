@@ -1,3 +1,9 @@
+const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
+const axios = require('axios');
+const http = require('http');
+const { Server } = require('socket.io');
+
 // ============================================
 // PHASE 1: MULTI-TENANT SERVER APIs
 // Add these routes to your existing server.js
@@ -502,3 +508,199 @@ app.get('/api/restaurants/:restaurantId/docs', (req, res) => {
         }
     });
 });
+const { v4: uuidv4 } = require('uuid');
+
+// ============================================
+// INITIALIZE APP & SERVER
+// ============================================
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST", "PUT"]
+    }
+});
+const PORT = process.env.PORT || 3000;
+/*
+// ============================================
+// INITIALIZE SUPABASE
+// ============================================
+const supabase = createClient(
+    process.env.SUPABASE_URL, 
+    process.env.SUPABASE_KEY
+);
+
+if (SUPABASE_URL && SUPABASE_KEY) {
+  console.log("✅ Supabase client initialized");
+  console.log("URL:", SUPABASE_URL);
+  console.log("Key prefix:", SUPABASE_KEY.substring(0, 6) + "..."); // only log part of the key
+} else {
+  console.error("❌ Supabase URL or Key missing");
+}
+**/
+// Load environment variables
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+// Check if Supabase credentials are defined and non-empty
+if (SUPABASE_URL && SUPABASE_KEY) {
+    console.log("✅ Supabase credentials loaded successfully from Render Env.");
+} else {
+    console.error("❌ Missing or invalid Supabase credentials! Check Render Environment Variables.");
+    process.exit(1); // Exit the process if credentials are invalid
+}
+
+// Create Supabase client
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ✅ Log URL and Key prefix
+
+// Optional connectivity check
+(async () => {
+  const { data, error } = await supabase.from('orders').select('*').limit(1);
+  if (error) {
+    console.error("❌ Supabase test query failed:", error.message);
+  } else {
+    console.log("✅ Supabase test query succeeded:", data);
+  }
+})();
+
+
+
+// ============================================
+// MIDDLEWARE
+// ============================================
+app.use(express.json());
+app.use(express.static('public'));
+
+// ============================================
+// HEALTH CHECK
+// ============================================
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        connections: io.engine.clientsCount
+    });
+});
+
+
+async function sendWhatsAppMessage(recipientPhone, message) {
+    try {
+        // Format phone number (remove any spaces or special chars)
+        const formattedPhone = recipientPhone.replace(/[^0-9]/g, '');
+        
+        // Meta WhatsApp Business API format
+        const response = await axios.post(
+            `https://graph.facebook.com/v24.0/${process.env.META_PHONE_ID}/messages`,
+            {
+                messaging_product: 'whatsapp',
+                to: formattedPhone,
+                type: 'text',
+                text: {
+                    body: message
+                }
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.META_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        
+        console.log(`✅ WhatsApp sent to ${formattedPhone}`);
+        return { success: true, messageId: response.data.messages[0].id };
+        
+    } catch (error) {
+        console.error('❌ WhatsApp send failed:', error.response?.data || error.message);
+        return { success: false, error: error.message };
+    }
+}
+
+
+// ============================================
+// NEW ENDPOINT - NODE.JS / SUPABASE
+// ============================================
+  app.post('/api/orders', async (req, res) => {
+   const orderData = req.body; 
+    const orderNumber = "SM" + Math.floor(1000 + Math.random() * 9000);
+    // Generate UUID yourself
+    const orderId = uuidv4();
+
+    const itemDetails = orderData.orderItems
+        .map(item => `${item.name} x${item.quantity}`)
+        .join('\n');
+    
+    const plainTextMessage = `*Order #${orderNumber}*\n\nItems:\n${itemDetails}\n\nTotal: ${orderData.totalAmount}\nType: ${orderData.orderType}`;
+    const whatsappUpdate = `✅ Order confirmed!\n\n*Order# ${orderNumber}*\n\nItems:\n${itemDetails}\n\nTotal: ${orderData.totalAmount}\nType: ${orderData.orderType}`;
+    
+    
+    
+    console.log("📝 Order id generated:", orderId);
+    console.log("📢 New order broadcast:", orderNumber);
+    console.log("📝 Order Data details list", orderData);
+
+
+    try {
+        // Save to Supabase
+        const { data: savedOrder, error: dbError } = await supabase
+            .from('orders')
+            .insert([{ 
+                id: orderId, // 👈 your UUID
+                order_number: orderNumber,
+                customer_name: orderData.customerName,
+                phone_number: orderData.phoneNumber,
+                user_input: orderData.userInput,
+                delivery_address: orderData.deliveryAddress,
+                order_source: orderData.orderType?.toLowerCase() || 'phone',
+                total_amount: orderData.totalAmount,
+                order_items: JSON.stringify(orderData.orderItems),
+                status: 'new'
+            }])
+            .select()
+            .single();
+
+        if (dbError) throw dbError;
+
+        // Broadcast to KDS - Legacy format
+
+        io.emit('new-kds-order', { 
+            id: orderId, // 👈 your UUID
+            orderNumber, 
+            ...orderData, 
+            plainTextMessage, 
+
+        });
+
+        // Send to Trello (if configured)
+        if (process.env.TRELLO_KEY && process.env.TRELLO_TOKEN) {
+            await axios.post(
+                `https://api.trello.com/1/cards?key=${process.env.TRELLO_KEY}&token=${process.env.TRELLO_TOKEN}`, 
+                {
+                    idList: process.env.TRELLO_LIST_ID,
+                    name: `Order #${orderNumber} - ${orderData.customerName}`,
+                    desc: plainTextMessage
+                }
+            ).catch(err => console.error('Trello error:', err.message));
+        }
+
+        // Send WhatsApp (if configured)
+        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
+            await sendWhatsAppMessage(orderData.phoneNumber, whatsappUpdate);
+        }
+
+        res.json({ success: true, orderNumber });
+
+    } catch (error) {
+        console.error("❌ Legacy order error:", error.message);
+        res.status(200).json({ 
+            success: true, 
+            orderNumber, 
+            note: "Order sent to kitchen, but external automation had an issue." 
+        });
+    }
+});
+
+

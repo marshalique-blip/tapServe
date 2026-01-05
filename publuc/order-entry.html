@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra Dine - Order Entry</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #FF6B35;
+            --primary-dark: #E5552E;
+            --secondary: #004E89;
+            --accent: #FFD23F;
+            --success: #06D6A0;
+            --danger: #EF476F;
+            --text-dark: #1A1A1A;
+            --text-light: #666;
+            --bg-light: #FAFAFA;
+            --bg-white: #FFFFFF;
+            --border: #E0E0E0;
+            --shadow: rgba(0, 0, 0, 0.08);
+            --shadow-lg: rgba(0, 0, 0, 0.12);
+        }
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, #FAFAFA 0%, #F0F0F0 100%);
+            color: var(--text-dark);
+            min-height: 100vh;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        /* Animated background pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(255, 107, 53, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 78, 137, 0.03) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Header */
+        .header {
+            background: var(--bg-white);
+            border-radius: 20px;
+            padding: 25px 35px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 20px var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--accent), var(--secondary));
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .logo-text h1 {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--text-dark);
+            letter-spacing: -1px;
+        }
+        
+        .logo-text p {
+            font-size: 13px;
+            color: var(--text-light);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .stats-badge {
+            background: var(--bg-light);
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-family: 'DM Mono', monospace;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .stats-badge strong {
+            color: var(--primary);
+            font-size: 18px;
+        }
+        
+        /* Main Layout */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 25px;
+            height: calc(100vh - 160px);
+        }
+        
+        /* Menu Section */
+        .menu-section {
+            background: var(--bg-white);
+            border-radius: 20px;
+            padding: 30px;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px var(--shadow);
+        }
+        
+        .search-bar {
+            position: sticky;
+            top: -30px;
+            background: var(--bg-white);
+            padding: 0 0 25px 0;
+            margin: -30px -30px 25px -30px;
+            padding: 30px 30px 25px 30px;
+            z-index: 10;
+            border-bottom: 2px solid var(--border);
+        }
+        
+        .search-input-wrapper {
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 16px 50px 16px 20px;
+            border: 2px solid var(--border);
+            border-radius: 14px;
+            font-size: 16px;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.3s ease;
+            background: var(--bg-light);
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg-white);
+            box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.1);
+        }
+        
+        .search-icon {
+            position: absolute;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 20px;
+            color: var(--text-light);
+        }
+        
+        .category-filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        
+        .category-chip {
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 2px solid var(--border);
+            background: var(--bg-white);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .category-chip:hover {
+            border-color: var(--primary);
+            background: rgba(255, 107, 53, 0.05);
+        }
+        
+        .category-chip.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .menu-category {
+            margin-bottom: 40px;
+        }
+        
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid var(--primary);
+        }
+        
+        .category-icon {
+            font-size: 28px;
+        }
+        
+        .category-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+        
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 18px;
+        }
+        
+        .menu-item {
+            background: var(--bg-white);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .menu-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px var(--shadow-lg);
+            border-color: var(--primary);
+        }
+        
+        .menu-item.unavailable {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .menu-item.unavailable::after {
+            content: 'OUT OF STOCK';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-15deg);
+            background: var(--danger);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 14px;
+            letter-spacing: 1px;
+            z-index: 2;
+        }
+        
+        .item-image {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+            background: var(--bg-light);
+        }
+        
+        .item-info {
+            padding: 15px;
+        }
+        
+        .item-name {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: var(--text-dark);
+            line-height: 1.3;
+        }
+        
+        .item-description {
+            font-size: 12px;
+            color: var(--text-light);
+            line-height: 1.5;
+            margin-bottom: 10px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .item-price {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--primary);
+            font-family: 'DM Mono', monospace;
+        }
+        
+        /* Order Panel */
+        .order-panel {
+            background: var(--bg-white);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 4px 20px var(--shadow);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .order-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        .order-header {
+            margin-bottom: 25px;
+        }
+        
+        .order-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+        
+        .order-subtitle {
+            font-size: 13px;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+        
+        .customer-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .form-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .form-input {
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.3s ease;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.1);
+        }
+        
+        .order-type-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .order-type-btn {
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            background: var(--bg-white);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .order-type-btn:hover {
+            border-color: var(--primary);
+            background: rgba(255, 107, 53, 0.05);
+        }
+        
+        .order-type-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .order-items {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            min-height: 200px;
+        }
+        
+        .empty-cart {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-light);
+        }
+        
+        .empty-cart-icon {
+            font-size: 64px;
+            opacity: 0.3;
+            margin-bottom: 15px;
+        }
+        
+        .order-item {
+            background: var(--bg-light);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .order-item-info {
+            flex: 1;
+        }
+        
+        .order-item-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 4px;
+        }
+        
+        .order-item-price {
+            font-size: 13px;
+            color: var(--text-light);
+            font-family: 'DM Mono', monospace;
+        }
+        
+        .order-item-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .qty-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-white);
+            padding: 6px 10px;
+            border-radius: 8px;
+        }
+        
+        .qty-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .qty-btn:hover {
+            background: var(--primary-dark);
+            transform: scale(1.1);
+        }
+        
+        .qty-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .qty-value {
+            font-weight: 700;
+            font-size: 16px;
+            min-width: 24px;
+            text-align: center;
+            font-family: 'DM Mono', monospace;
+        }
+        
+        .remove-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .remove-btn:hover {
+            background: #D63851;
+            transform: scale(1.1);
+        }
+        
+        .order-summary {
+            background: linear-gradient(135deg, var(--bg-light) 0%, #E8E8E8 100%);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            font-size: 15px;
+        }
+        
+        .summary-row.total {
+            border-top: 2px solid var(--border);
+            margin-top: 10px;
+            padding-top: 15px;
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--primary);
+        }
+        
+        .summary-value {
+            font-family: 'DM Mono', monospace;
+            font-weight: 700;
+        }
+        
+        .place-order-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 18px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
+        }
+        
+        .place-order-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(255, 107, 53, 0.4);
+        }
+        
+        .place-order-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        .place-order-btn:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        
+        .clear-order-btn {
+            width: 100%;
+            padding: 12px;
+            background: transparent;
+            color: var(--danger);
+            border: 2px solid var(--danger);
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .clear-order-btn:hover {
+            background: var(--danger);
+            color: white;
+        }
+        
+        /* Success Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background: var(--bg-white);
+            border-radius: 24px;
+            padding: 50px 40px;
+            max-width: 500px;
+            text-align: center;
+            animation: slideUp 0.4s ease;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--success), #04B485);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            margin: 0 auto 25px;
+            animation: scaleIn 0.5s ease 0.2s both;
+        }
+        
+        @keyframes scaleIn {
+            from {
+                transform: scale(0);
+            }
+            to {
+                transform: scale(1);
+            }
+        }
+        
+        .modal-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 12px;
+        }
+        
+        .modal-order-number {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--primary);
+            font-family: 'DM Mono', monospace;
+            margin: 20px 0;
+        }
+        
+        .modal-text {
+            font-size: 15px;
+            color: var(--text-light);
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .modal-btn {
+            padding: 16px 40px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+        
+        /* Loading State */
+        .loading {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+            
+            .order-panel {
+                max-height: 600px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .menu-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                <div class="logo-icon">🍔</div>
+                <div class="logo-text">
+                    <h1>Ultra Dine</h1>
+                    <p>Order Entry System</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="stats-badge">
+                    <span>Today:</span>
+                    <strong id="todayOrders">0</strong>
+                    <span>orders</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Menu Section -->
+            <div class="menu-section">
+                <div class="search-bar">
+                    <div class="search-input-wrapper">
+                        <input 
+                            type="text" 
+                            class="search-input" 
+                            placeholder="Search menu items..."
+                            id="searchInput"
+                        >
+                        <span class="search-icon">🔍</span>
+                    </div>
+                    <div class="category-filters" id="categoryFilters"></div>
+                </div>
+                
+                <div id="menuContainer"></div>
+            </div>
+            
+            <!-- Order Panel -->
+            <div class="order-panel">
+                <div class="order-header">
+                    <h2 class="order-title">Current Order</h2>
+                    <p class="order-subtitle">Add items from menu</p>
+                </div>
+                
+                <form class="customer-form" id="customerForm">
+                    <div class="form-group">
+                        <label class="form-label">Customer Name</label>
+                        <input 
+                            type="text" 
+                            class="form-input" 
+                            id="customerName" 
+                            placeholder="Enter customer name"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Phone Number</label>
+                        <input 
+                            type="tel" 
+                            class="form-input" 
+                            id="phoneNumber" 
+                            placeholder="(246) 555-1234"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Order Type</label>
+                        <div class="order-type-selector">
+                            <button type="button" class="order-type-btn active" data-type="walk-in">
+                                🚶 Walk-in
+                            </button>
+                            <button type="button" class="order-type-btn" data-type="phone">
+                                📞 Phone
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Notes (Optional)</label>
+                        <input 
+                            type="text" 
+                            class="form-input" 
+                            id="orderNotes" 
+                            placeholder="Special instructions..."
+                        >
+                    </div>
+                </form>
+                
+                <div class="order-items" id="orderItems">
+                    <div class="empty-cart">
+                        <div class="empty-cart-icon">🛒</div>
+                        <p>No items added yet</p>
+                    </div>
+                </div>
+                
+                <div class="order-summary" id="orderSummary" style="display: none;">
+                    <div class="summary-row">
+                        <span>Subtotal:</span>
+                        <span class="summary-value" id="subtotal">$0.00</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Tax (8%):</span>
+                        <span class="summary-value" id="tax">$0.00</span>
+                    </div>
+                    <div class="summary-row total">
+                        <span>Total:</span>
+                        <span class="summary-value" id="total">$0.00</span>
+                    </div>
+                </div>
+                
+                <button class="place-order-btn" id="placeOrderBtn" disabled>
+                    Place Order
+                </button>
+                
+                <button class="clear-order-btn" id="clearOrderBtn" style="display: none;">
+                    Clear Order
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Success Modal -->
+    <div class="modal" id="successModal">
+        <div class="modal-content">
+            <div class="success-icon">✓</div>
+            <h2 class="modal-title">Order Placed Successfully!</h2>
+            <div class="modal-order-number" id="modalOrderNumber">#UD0000</div>
+            <p class="modal-text">
+                The order has been sent to the kitchen.<br>
+                Customer will be notified when it's ready.
+            </p>
+            <button class="modal-btn" onclick="closeModal()">Continue</button>
+        </div>
+    </div>
+    
+    <script>
+        // Configuration
+        const RESTAURANT_ID = '00000000-0000-0000-0000-000000000001'; // Ultra Dine
+        const API_BASE = window.location.origin; // Change to your API URL
+        
+        // State
+        let menuData = [];
+        let currentOrder = [];
+        let selectedOrderType = 'walk-in';
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMenu();
+            setupEventListeners();
+        });
+        
+        // Load menu from API
+        async function loadMenu() {
+            try {
+                const response = await fetch(`${API_BASE}/api/restaurants/${RESTAURANT_ID}/menu?available_only=false`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    menuData = data.menu;
+                    renderMenu();
+                    renderCategoryFilters();
+                }
+            } catch (error) {
+                console.error('Failed to load menu:', error);
+                alert('Failed to load menu. Please refresh the page.');
+            }
+        }
+        
+        // Render category filters
+        function renderCategoryFilters() {
+            const container = document.getElementById('categoryFilters');
+            container.innerHTML = '<div class="category-chip active" data-category="all">All</div>';
+            
+            menuData.forEach(category => {
+                const chip = document.createElement('div');
+                chip.className = 'category-chip';
+                chip.dataset.category = category.id;
+                chip.textContent = category.name;
+                chip.onclick = () => filterByCategory(category.id, chip);
+                container.appendChild(chip);
+            });
+        }
+        
+        // Filter by category
+        function filterByCategory(categoryId, chipElement) {
+            document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+            chipElement.classList.add('active');
+            
+            if (categoryId === 'all') {
+                document.querySelectorAll('.menu-category').forEach(c => c.style.display = 'block');
+            } else {
+                document.querySelectorAll('.menu-category').forEach(c => {
+                    c.style.display = c.dataset.categoryId === categoryId ? 'block' : 'none';
+                });
+            }
+        }
+        
+        // Render menu
+        function renderMenu() {
+            const container = document.getElementById('menuContainer');
+            container.innerHTML = '';
+            
+            menuData.forEach(category => {
+                if (category.items.length === 0) return;
+                
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'menu-category';
+                categoryDiv.dataset.categoryId = category.id;
+                
+                categoryDiv.innerHTML = `
+                    <div class="category-header">
+                        <span class="category-icon">${getCategoryIcon(category.name)}</span>
+                        <h3 class="category-title">${category.name}</h3>
+                    </div>
+                    <div class="menu-grid" id="category-${category.id}"></div>
+                `;
+                
+                container.appendChild(categoryDiv);
+                
+                const gridContainer = document.getElementById(`category-${category.id}`);
+                category.items.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `menu-item ${!item.is_available ? 'unavailable' : ''}`;
+                    if (item.is_available) {
+                        itemDiv.onclick = () => addToOrder(item);
+                    }
+                    
+                    itemDiv.innerHTML = `
+                        <img src="${item.image_url}" alt="${item.name}" class="item-image" onerror="this.src='https://via.placeholder.com/400x300?text=${encodeURIComponent(item.name)}'">
+                        <div class="item-info">
+                            <div class="item-name">${item.name}</div>
+                            <div class="item-description">${item.description || ''}</div>
+                            <div class="item-price">$${parseFloat(item.price).toFixed(2)}</div>
+                        </div>
+                    `;
+                    
+                    gridContainer.appendChild(itemDiv);
+                });
+            });
+        }
+        
+        // Get category icon
+        function getCategoryIcon(categoryName) {
+            const icons = {
+                'Signature Burgers': '🍔',
+                'Appetizers & Starters': '🌮',
+                'Fresh Salads': '🥗',
+                'Sandwiches & Wraps': '🥪',
+                'Sides': '🍟',
+                'Desserts': '🍰',
+                'Beverages': '🥤'
+            };
+            return icons[categoryName] || '🍽️';
+        }
+        
+        // Add item to order
+        function addToOrder(item) {
+            const existingItem = currentOrder.find(i => i.id === item.id);
+            
+            if (existingItem) {
+                existingItem.quantity++;
+            } else {
+                currentOrder.push({
+                    id: item.id,
+                    name: item.name,
+                    price: parseFloat(item.price),
+                    quantity: 1
+                });
+            }
+            
+            renderOrder();
+        }
+        
+        // Update quantity
+        function updateQuantity(itemId, change) {
+            const item = currentOrder.find(i => i.id === itemId);
+            if (item) {
+                item.quantity += change;
+                if (item.quantity <= 0) {
+                    removeFromOrder(itemId);
+                } else {
+                    renderOrder();
+                }
+            }
+        }
+        
+        // Remove from order
+        function removeFromOrder(itemId) {
+            currentOrder = currentOrder.filter(i => i.id !== itemId);
+            renderOrder();
+        }
+        
+        // Render order
+        function renderOrder() {
+            const container = document.getElementById('orderItems');
+            const summaryDiv = document.getElementById('orderSummary');
+            const placeOrderBtn = document.getElementById('placeOrderBtn');
+            const clearOrderBtn = document.getElementById('clearOrderBtn');
+            
+            if (currentOrder.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-cart">
+                        <div class="empty-cart-icon">🛒</div>
+                        <p>No items added yet</p>
+                    </div>
+                `;
+                summaryDiv.style.display = 'none';
+                placeOrderBtn.disabled = true;
+                clearOrderBtn.style.display = 'none';
+                return;
+            }
+            
+            container.innerHTML = currentOrder.map(item => `
+                <div class="order-item">
+                    <div class="order-item-info">
+                        <div class="order-item-name">${item.name}</div>
+                        <div class="order-item-price">$${item.price.toFixed(2)} each</div>
+                    </div>
+                    <div class="order-item-controls">
+                        <div class="qty-control">
+                            <button class="qty-btn" onclick="updateQuantity('${item.id}', -1)">-</button>
+                            <span class="qty-value">${item.quantity}</span>
+                            <button class="qty-btn" onclick="updateQuantity('${item.id}', 1)">+</button>
+                        </div>
+                        <button class="remove-btn" onclick="removeFromOrder('${item.id}')">×</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Calculate totals (will be recalculated on server, this is just preview)
+            const subtotal = currentOrder.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const tax = subtotal * 0.08;
+            const total = subtotal + tax;
+            
+            document.getElementById('subtotal').textContent = `$${subtotal.toFixed(2)}`;
+            document.getElementById('tax').textContent = `$${tax.toFixed(2)}`;
+            document.getElementById('total').textContent = `$${total.toFixed(2)}`;
+            
+            summaryDiv.style.display = 'block';
+            placeOrderBtn.disabled = false;
+            clearOrderBtn.style.display = 'block';
+        }
+        
+        // Setup event listeners
+        function setupEventListeners() {
+            // Order type buttons
+            document.querySelectorAll('.order-type-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.order-type-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedOrderType = btn.dataset.type;
+                });
+            });
+            
+            // Search
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    const name = item.querySelector('.item-name').textContent.toLowerCase();
+                    const description = item.querySelector('.item-description').textContent.toLowerCase();
+                    item.style.display = (name.includes(query) || description.includes(query)) ? 'block' : 'none';
+                });
+            });
+            
+            // Place order
+            document.getElementById('placeOrderBtn').addEventListener('click', placeOrder);
+            
+            // Clear order
+            document.getElementById('clearOrderBtn').addEventListener('click', () => {
+                if (confirm('Clear all items from order?')) {
+                    currentOrder = [];
+                    renderOrder();
+                }
+            });
+        }
+        
+        // Place order
+        async function placeOrder() {
+            const customerName = document.getElementById('customerName').value.trim();
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
+            const notes = document.getElementById('orderNotes').value.trim();
+            
+            if (!customerName || !phoneNumber) {
+                alert('Please enter customer name and phone number');
+                return;
+            }
+            
+            const btn = document.getElementById('placeOrderBtn');
+            btn.disabled = true;
+            btn.innerHTML = 'Placing Order<span class="spinner"></span>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/restaurants/${RESTAURANT_ID}/orders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer_name: customerName,
+                        phone_number: phoneNumber,
+                        order_type: selectedOrderType,
+                        items: currentOrder,
+                        notes: notes
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccessModal(data.order.order_number);
+                    resetOrder();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to place order'));
+                    btn.disabled = false;
+                    btn.textContent = 'Place Order';
+                }
+            } catch (error) {
+                console.error('Order error:', error);
+                alert('Failed to place order. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Place Order';
+            }
+        }
+        
+        // Show success modal
+        function showSuccessModal(orderNumber) {
+            document.getElementById('modalOrderNumber').textContent = '#' + orderNumber;
+            document.getElementById('successModal').classList.add('show');
+        }
+        
+        // Close modal
+        function closeModal() {
+            document.getElementById('successModal').classList.remove('show');
+        }
+        
+        // Reset order
+        function resetOrder() {
+            currentOrder = [];
+            document.getElementById('customerName').value = '';
+            document.getElementById('phoneNumber').value = '';
+            document.getElementById('orderNotes').value = '';
+            renderOrder();
+            
+            const btn = document.getElementById('placeOrderBtn');
+            btn.disabled = true;
+            btn.textContent = 'Place Order';
+        }
+    </script>
+</body>
+</html>

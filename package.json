@@ -1,0 +1,21 @@
+{
+  "name": "restaurant-app",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
+    "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "express": "^4.22.1",
+    "socket.io": "^4.8.3",
+    "uuid": "^13.0.0"
+  },
+  "description": "",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
