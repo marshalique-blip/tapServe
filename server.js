@@ -145,6 +145,94 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             });
         }
         
+// ============================================
+// UPDATE ORDER STATUS (with WhatsApp notifications)
+// ============================================
+app.put('/api/orders/:orderId/status', async (req, res) => {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    
+    // Get current order details BEFORE updating
+    const { data: currentOrder, error: fetchError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+    
+    if (fetchError) {
+        return res.status(500).json({ success: false, error: fetchError.message });
+    }
+    
+    // Update in database
+    const { data, error } = await supabase
+        .from('orders')
+        .update({ 
+            status,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId)
+        .select()
+        .single();
+    
+    if (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+    
+    console.log(`📝 Order ${data.order_number} status: ${currentOrder.status} → ${status}`);
+    
+    // Send WhatsApp notifications for status changes
+    if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.phone_number) {
+        let message = '';
+        let shouldSend = false;
+        
+        if (status === 'preparing' && currentOrder.status === 'new') {
+            message = `👨‍🍳 *Order Update*\n\n` +
+                `Order #${data.order_number}\n\n` +
+                `Your order is now being prepared! 🔥\n` +
+                `We'll notify you when it's ready.`;
+            shouldSend = true;
+        } 
+        else if (status === 'ready' && currentOrder.status === 'preparing') {
+            message = `✅ *Order Ready!*\n\n` +
+                `Order #${data.order_number}\n\n` +
+                `Your order is ready for ${currentOrder.order_type}! 🎉\n\n` +
+                `${currentOrder.order_type === 'Delivery' ? '🚗 Our driver will be there soon!' : '🥡 Ready for pickup!'}`;
+            shouldSend = true;
+        }
+        else if (status === 'completed' && currentOrder.status === 'ready') {
+            message = `🎊 *Order Completed*\n\n` +
+                `Order #${data.order_number}\n\n` +
+                `Thank you for your order! 😊\n` +
+                `We hope you enjoy your meal!`;
+            shouldSend = true;
+        }
+        
+        if (shouldSend) {
+            console.log(`📱 Sending WhatsApp update to ${currentOrder.phone_number}`);
+            
+            sendWhatsAppMessage(currentOrder.phone_number, message)
+                .then(result => {
+                    if (result.success) {
+                        console.log(`✅ WhatsApp status update sent for ${data.order_number}`);
+                    } else {
+                        console.error(`❌ WhatsApp failed for ${data.order_number}:`, result.error);
+                    }
+                })
+                .catch(err => {
+                    console.error(`❌ WhatsApp error for ${data.order_number}:`, err);
+                });
+        }
+    }
+    
+    // Broadcast to other KDS displays
+    io.emit('order_updated', {
+        orderId: orderId,
+        status: status
+    });
+    
+    res.json({ success: true, order: data });
+});
+
         // Get restaurant settings for tax rate
         const { data: restaurant, error: restError } = await supabase
             .from('restaurants')
