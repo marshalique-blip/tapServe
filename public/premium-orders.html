@@ -1010,8 +1010,8 @@
     const RESTAURANT_ID = '0fa03a81-6d4c-4d97-9e49-af73ddcbb449'; // Ultra Dine demo
     const chatNumber = '12462367556';
     const API_BASE = window.location.origin;
+
     
-   
     // ============================================
     // STATE
     // ============================================
@@ -1029,7 +1029,7 @@
     // ============================================
     function getPhoneFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
-        const phone = urlParams.get('wa_number');
+        const phone = urlParams.get('phone');
         
         if (phone) {
             console.log('📱 Phone extracted from URL:', phone);
