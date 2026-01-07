@@ -132,6 +132,264 @@ function getStatusMessage(status, orderNumber) {
 }
 
 // ============================================
+// LEGACY ENDPOINT - EXISTING SYSTEM
+// ============================================
+app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { customer_name, phone_number, order_type, items: orderItems, notes } = req.body;
+        
+        if (!customer_name || !phone_number || !orderItems || orderItems.length === 0) {
+            return res.status(400).json({ 
+                error: 'Missing required fields: customer_name, phone_number, items' 
+            });
+        }
+        
+// ============================================
+// UPDATE ORDER STATUS (with WhatsApp notifications)
+// ============================================
+app.put('/api/orders/:orderId/status', async (req, res) => {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    
+    // Get current order details BEFORE updating
+    const { data: currentOrder, error: fetchError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+    
+    if (fetchError) {
+        return res.status(500).json({ success: false, error: fetchError.message });
+    }
+    
+    // Update in database
+    const { data, error } = await supabase
+        .from('orders')
+        .update({ 
+            status,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId)
+        .select()
+        .single();
+    
+    if (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+    
+    console.log(`📝 Order ${data.order_number} status: ${currentOrder.status} → ${status}`);
+    
+    // Send WhatsApp notifications for status changes
+    if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.phone_number) {
+        let message = '';
+        let shouldSend = false;
+        
+        if (status === 'preparing' && currentOrder.status === 'new') {
+            message = `👨‍🍳 *Order Update*\n\n` +
+                `Order #${data.order_number}\n\n` +
+                `Your order is now being prepared! 🔥\n` +
+                `We'll notify you when it's ready.`;
+            shouldSend = true;
+        } 
+        else if (status === 'ready' && currentOrder.status === 'preparing') {
+            message = `✅ *Order Ready!*\n\n` +
+                `Order #${data.order_number}\n\n` +
+                `Your order is ready for ${currentOrder.order_type}! 🎉\n\n` +
+                `${currentOrder.order_type === 'Delivery' ? '🚗 Our driver will be there soon!' : '🥡 Ready for pickup!'}`;
+            shouldSend = true;
+        }
+        else if (status === 'completed' && currentOrder.status === 'ready') {
+            message = `🎊 *Order Completed*\n\n` +
+                `Order #${data.order_number}\n\n` +
+                `Thank you for your order! 😊\n` +
+                `We hope you enjoy your meal!`;
+            shouldSend = true;
+        }
+        
+        if (shouldSend) {
+            console.log(`📱 Sending WhatsApp update to ${currentOrder.phone_number}`);
+            
+            sendWhatsAppMessage(currentOrder.phone_number, message)
+                .then(result => {
+                    if (result.success) {
+                        console.log(`✅ WhatsApp status update sent for ${data.order_number}`);
+                    } else {
+                        console.error(`❌ WhatsApp failed for ${data.order_number}:`, result.error);
+                    }
+                })
+                .catch(err => {
+                    console.error(`❌ WhatsApp error for ${data.order_number}:`, err);
+                });
+        }
+    }
+    
+    // Broadcast to other KDS displays
+    io.emit('order_updated', {
+        orderId: orderId,
+        status: status
+    });
+    
+    res.json({ success: true, order: data });
+});
+
+        // Get restaurant settings for tax rate
+        const { data: restaurant, error: restError } = await supabase
+            .from('restaurants')
+            .select('settings, name')
+            .eq('id', restaurantId)
+            .single();
+        
+        if (restError) throw restError;
+        
+        const taxRate = restaurant.settings.tax_rate || 0;
+        const restaurantName = restaurant.name || 'Restaurant';
+        
+        // Fetch actual prices from database (prevent price manipulation)
+        const itemIds = orderItems.map(item => item.id);
+        const { data: menuItems, error: itemsError } = await supabase
+            .from('menu_items')
+            .select('id, name, price, is_available')
+            .eq('restaurant_id', restaurantId)
+            .in('id', itemIds);
+        
+        if (itemsError) throw itemsError;
+        
+        // Check if any items are unavailable
+        const unavailableItems = menuItems.filter(item => !item.is_available);
+        if (unavailableItems.length > 0) {
+            return res.status(400).json({ 
+                error: 'Some items are currently unavailable',
+                unavailable: unavailableItems.map(i => i.name)
+            });
+        }
+        
+        // Calculate order total using SERVER prices
+        let subtotal = 0;
+        const calculatedItems = orderItems.map(orderItem => {
+            const menuItem = menuItems.find(m => m.id === orderItem.id);
+            if (!menuItem) {
+                throw new Error(`Item ${orderItem.id} not found`);
+            }
+            
+            const quantity = parseInt(orderItem.quantity) || 1;
+            const itemTotal = menuItem.price * quantity;
+            subtotal += itemTotal;
+            
+            return {
+                id: menuItem.id,
+                name: menuItem.name,
+                price: menuItem.price,
+                quantity: quantity,
+                item_total: itemTotal
+            };
+        });
+        
+        const tax = subtotal * taxRate;
+        const total = subtotal + tax;
+        
+        // Generate order number
+        const orderNumber = "UD" + Math.floor(1000 + Math.random() * 9000);
+        const orderId = uuidv4();
+        
+        // Save order to database
+        const { data: savedOrder, error: dbError } = await supabase
+            .from('orders')
+            .insert([{
+                id: orderId,
+                restaurant_id: restaurantId,
+                order_number: orderNumber,
+                customer_name: customer_name,
+                phone_number: phone_number,
+                order_source: order_type?.toLowerCase() || 'walk-in',
+                order_items: JSON.stringify(calculatedItems),
+                total_amount: total.toFixed(2),
+                user_input: notes || '',
+                status: 'new'
+            }])
+            .select()
+            .single();
+        
+        if (dbError) throw dbError;
+        
+        console.log(`✅ Order created: ${orderNumber} - $${total.toFixed(2)}`);
+        
+        // ============================================
+        // FIX 1: SEND IMMEDIATE WHATSAPP CONFIRMATION
+        // ============================================
+        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
+            const confirmationMessage = `✅ *Order Confirmed!*\n\n` +
+                `🏪 ${restaurantName}\n` +
+                `📋 Order #${orderNumber}\n\n` +
+                `*Your Order:*\n` +
+                calculatedItems.map(item => 
+                    `• ${item.name} x${item.quantity} - $${item.item_total.toFixed(2)}`
+                ).join('\n') +
+                `\n\n💰 *Total: $${total.toFixed(2)}*\n\n` +
+                `Thank you! We'll send you updates as your order is prepared.\n\n` +
+                `📱 You can contact us if you have any questions.`;
+            
+            // Send WhatsApp asynchronously (don't wait)
+            sendWhatsAppMessage(phone_number, confirmationMessage)
+                .then(result => {
+                    if (result.success) {
+                        console.log(`✅ WhatsApp confirmation sent to ${phone_number}`);
+                    } else {
+                        console.error(`❌ WhatsApp failed: ${result.error}`);
+                    }
+                })
+                .catch(err => {
+                    console.error(`❌ WhatsApp error:`, err);
+                });
+        } else {
+            console.warn('⚠️ WhatsApp not configured (missing META_PHONE_ID or META_ACCESS_TOKEN)');
+        }
+        
+        // ============================================
+        // FIX 2: BROADCAST TO KDS WITH FULL DETAILS
+        // ============================================
+        io.emit('new-kds-order', {
+            id: orderId,
+            orderNumber: orderNumber,
+            customerName: customer_name,
+            phone: phone_number,
+            orderType: order_type || 'Walk-in',
+            items: calculatedItems,
+            subtotal: subtotal.toFixed(2),
+            tax: tax.toFixed(2),
+            total: total.toFixed(2),
+            status: 'new',
+            timestamp: new Date().toISOString(),
+            notes: notes || ''
+        });
+        
+        console.log(`📡 KDS broadcast sent for order ${orderNumber}`);
+        
+        // Also log connected KDS clients
+        console.log(`📺 Connected KDS displays: ${io.engine.clientsCount}`);
+        
+        // Return response to client
+        res.json({
+            success: true,
+            order: {
+                id: orderId,
+                order_number: orderNumber,
+                items: calculatedItems,
+                subtotal: subtotal.toFixed(2),
+                tax: tax.toFixed(2),
+                total: total.toFixed(2),
+                tax_rate: (taxRate * 100).toFixed(1) + '%'
+            }
+        });
+        
+    } catch (err) {
+        console.error('Create order error:', err);
+        res.status(500).json({ error: err.message || 'Failed to create order' });
+    }
+});
+
+
+// ============================================
 // MULTI-TENANT RESTAURANT APIS
 // ============================================
 
@@ -212,7 +470,114 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
     }
 });
 
-// 3. CREATE ORDER WITH SERVER-SIDE CALCULATIONS
+// 3. GET SINGLE MENU ITEM
+app.get('/api/restaurants/:restaurantId/menu/:itemId', async (req, res) => {
+    try {
+        const { restaurantId, itemId } = req.params;
+        
+        const { data, error } = await supabase
+            .from('menu_items')
+            .select(`
+                *,
+                category:menu_categories(name)
+            `)
+            .eq('id', itemId)
+            .eq('restaurant_id', restaurantId)
+            .single();
+        
+        if (error || !data) {
+            return res.status(404).json({ error: 'Item not found' });
+        }
+        
+        res.json({ success: true, item: data });
+        
+    } catch (err) {
+        console.error('Get item error:', err);
+        res.status(500).json({ error: 'Failed to get item' });
+    }
+});
+
+// 4. TOGGLE ITEM AVAILABILITY (Out of Stock)
+app.patch('/api/restaurants/:restaurantId/menu/:itemId/availability', async (req, res) => {
+    try {
+        const { restaurantId, itemId } = req.params;
+        const { is_available } = req.body;
+        
+        if (typeof is_available !== 'boolean') {
+            return res.status(400).json({ error: 'is_available must be boolean' });
+        }
+        
+        const { data, error } = await supabase
+            .from('menu_items')
+            .update({ 
+                is_available: is_available,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', itemId)
+            .eq('restaurant_id', restaurantId)
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        console.log(`📦 Item ${data.name} availability: ${is_available ? 'IN STOCK' : 'OUT OF STOCK'}`);
+        
+        res.json({ 
+            success: true, 
+            item: data,
+            message: `Item ${is_available ? 'marked as available' : 'marked as out of stock'}`
+        });
+        
+    } catch (err) {
+        console.error('Toggle availability error:', err);
+        res.status(500).json({ error: 'Failed to update availability' });
+    }
+});
+
+// 5. UPDATE MENU ITEM
+app.put('/api/restaurants/:restaurantId/menu/:itemId', async (req, res) => {
+    try {
+        const { restaurantId, itemId } = req.params;
+        const { name, description, price, image_url, is_available, category_id } = req.body;
+        
+        const updates = {
+            updated_at: new Date().toISOString()
+        };
+        
+        if (name !== undefined) updates.name = name;
+        if (description !== undefined) updates.description = description;
+        if (price !== undefined) {
+            const parsedPrice = parseFloat(price);
+            if (isNaN(parsedPrice) || parsedPrice < 0) {
+                return res.status(400).json({ error: 'Invalid price' });
+            }
+            updates.price = parsedPrice;
+        }
+        if (image_url !== undefined) updates.image_url = image_url;
+        if (is_available !== undefined) updates.is_available = is_available;
+        if (category_id !== undefined) updates.category_id = category_id;
+        
+        const { data, error } = await supabase
+            .from('menu_items')
+            .update(updates)
+            .eq('id', itemId)
+            .eq('restaurant_id', restaurantId)
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        console.log(`✅ Menu item updated: ${data.name}`);
+        
+        res.json({ success: true, item: data });
+        
+    } catch (err) {
+        console.error('Update item error:', err);
+        res.status(500).json({ error: 'Failed to update item' });
+    }
+});
+
+// 6. CREATE ORDER WITH SERVER-SIDE CALCULATIONS
 app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
@@ -227,14 +592,13 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         // Get restaurant settings for tax rate
         const { data: restaurant, error: restError } = await supabase
             .from('restaurants')
-            .select('settings, name')
+            .select('settings')
             .eq('id', restaurantId)
             .single();
         
         if (restError) throw restError;
         
         const taxRate = restaurant.settings.tax_rate || 0;
-        const restaurantName = restaurant.name || 'Restaurant';
         
         // Fetch actual prices from database (prevent price manipulation)
         const itemIds = orderItems.map(item => item.id);
@@ -292,7 +656,6 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 order_number: orderNumber,
                 customer_name: customer_name,
                 phone_number: phone_number,
-                user_input_number: user_input_number,
                 order_source: order_type?.toLowerCase() || 'walk-in',
                 order_items: JSON.stringify(calculatedItems),
                 total_amount: total.toFixed(2),
@@ -306,49 +669,17 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         
         console.log(`✅ Order created: ${orderNumber} - $${total.toFixed(2)}`);
         
-        // Send WhatsApp confirmation
-        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
-            const confirmationMessage = `✅ *Order Confirmed!*\n\n` +
-                `🏪 ${restaurantName}\n` +
-                `📋 Order #${orderNumber}\n\n` +
-                `*Your Order:*\n` +
-                calculatedItems.map(item => 
-                    `• ${item.name} x${item.quantity} - $${item.item_total.toFixed(2)}`
-                ).join('\n') +
-                `\n\n💰 *Total: $${total.toFixed(2)}*\n\n` +
-                `Thank you! We'll send you updates as your order is prepared.\n\n` +
-                `📱 You can contact us if you have any questions.`;
-            
-            sendWhatsAppMessage(phone_number, confirmationMessage)
-                .then(result => {
-                    if (result.success) {
-                        console.log(`✅ WhatsApp confirmation sent to ${phone_number}`);
-                    } else {
-                        console.error(`❌ WhatsApp failed: ${result.error}`);
-                    }
-                })
-                .catch(err => {
-                    console.error(`❌ WhatsApp error:`, err);
-                });
-        }
-        
         // Broadcast to KDS
         io.emit('new-kds-order', {
             id: orderId,
             orderNumber: orderNumber,
             customerName: customer_name,
-            phone: phone_number,
-            orderType: order_type || 'Walk-in',
+            orderType: order_type,
             items: calculatedItems,
             subtotal: subtotal.toFixed(2),
             tax: tax.toFixed(2),
-            total: total.toFixed(2),
-            status: 'new',
-            timestamp: new Date().toISOString(),
-            notes: notes || ''
+            total: total.toFixed(2)
         });
-        
-        console.log(`📡 KDS broadcast sent for order ${orderNumber}`);
         
         res.json({
             success: true,
@@ -369,103 +700,45 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     }
 });
 
-// ============================================
-// 4. UPDATE ORDER STATUS (with WhatsApp notifications)
-// ============================================
-app.put('/api/orders/:orderId/status', async (req, res) => {
-    const { orderId } = req.params;
-    const { status } = req.body;
-    
+// 7. BULK UPDATE AVAILABILITY
+app.post('/api/restaurants/:restaurantId/menu/bulk-availability', async (req, res) => {
     try {
-        // Get current order details BEFORE updating
-        const { data: currentOrder, error: fetchError } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('id', orderId)
-            .single();
+        const { restaurantId } = req.params;
+        const { item_ids, is_available } = req.body;
         
-        if (fetchError) {
-            return res.status(500).json({ success: false, error: fetchError.message });
+        if (!Array.isArray(item_ids) || typeof is_available !== 'boolean') {
+            return res.status(400).json({ 
+                error: 'Invalid request. Need item_ids array and is_available boolean' 
+            });
         }
         
-        // Update in database
         const { data, error } = await supabase
-            .from('orders')
+            .from('menu_items')
             .update({ 
-                status,
+                is_available: is_available,
                 updated_at: new Date().toISOString()
             })
-            .eq('id', orderId)
-            .select()
-            .single();
+            .eq('restaurant_id', restaurantId)
+            .in('id', item_ids)
+            .select();
         
-        if (error) {
-            return res.status(500).json({ success: false, error: error.message });
-        }
+        if (error) throw error;
         
-        console.log(`📝 Order ${data.order_number} status: ${currentOrder.status} → ${status}`);
+        console.log(`📦 Bulk update: ${data.length} items marked as ${is_available ? 'available' : 'unavailable'}`);
         
-        // Send WhatsApp notifications for status changes
-        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.phone_number) {
-            let message = '';
-            let shouldSend = false;
-            
-            if (status === 'preparing' && currentOrder.status === 'new') {
-                message = `👨‍🍳 *Order Update*\n\n` +
-                    `Order #${data.order_number}\n\n` +
-                    `Your order is now being prepared! 🔥\n` +
-                    `We'll notify you when it's ready.`;
-                shouldSend = true;
-            } 
-            else if (status === 'ready' && currentOrder.status === 'preparing') {
-                message = `✅ *Order Ready!*\n\n` +
-                    `Order #${data.order_number}\n\n` +
-                    `Your order is ready for ${currentOrder.order_type}! 🎉\n\n` +
-                    `${currentOrder.order_type === 'Delivery' ? '🚗 Our driver will be there soon!' : '🥡 Ready for pickup!'}`;
-                shouldSend = true;
-            }
-            else if (status === 'completed' && currentOrder.status === 'ready') {
-                message = `🎊 *Order Completed*\n\n` +
-                    `Order #${data.order_number}\n\n` +
-                    `Thank you for your order! 😊\n` +
-                    `We hope you enjoy your meal!`;
-                shouldSend = true;
-            }
-            
-            if (shouldSend) {
-                console.log(`📱 Sending WhatsApp update to ${currentOrder.phone_number}`);
-                
-                sendWhatsAppMessage(currentOrder.phone_number, message)
-                    .then(result => {
-                        if (result.success) {
-                            console.log(`✅ WhatsApp status update sent for ${data.order_number}`);
-                        } else {
-                            console.error(`❌ WhatsApp failed for ${data.order_number}:`, result.error);
-                        }
-                    })
-                    .catch(err => {
-                        console.error(`❌ WhatsApp error for ${data.order_number}:`, err);
-                    });
-            }
-        }
-        
-        // Broadcast to other KDS displays
-        io.emit('order_updated', {
-            orderId: orderId,
-            status: status
+        res.json({ 
+            success: true, 
+            updated_count: data.length,
+            items: data
         });
         
-        res.json({ success: true, order: data });
-        
     } catch (err) {
-        console.error('Update status error:', err);
-        res.status(500).json({ error: err.message || 'Failed to update status' });
+        console.error('Bulk update error:', err);
+        res.status(500).json({ error: 'Failed to bulk update' });
     }
 });
 
-// ============================================
-// 5. GET ORDER DETAILS
-// ============================================
+// 8. GET ORDER DETAILS
 app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
     try {
         const { restaurantId, orderId } = req.params;
@@ -489,38 +762,40 @@ app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
     }
 });
 
-// ============================================
-// 6. GET ALL ORDERS (for KDS)
-// ============================================
-app.get('/api/orders', async (req, res) => {
+// 9. SEARCH MENU ITEMS
+app.get('/api/restaurants/:restaurantId/menu/search', async (req, res) => {
     try {
-        const { status } = req.query;
+        const { restaurantId } = req.params;
+        const { q } = req.query;
         
-        let query = supabase
-            .from('orders')
-            .select('*')
-            .order('created_at', { ascending: false });
-        
-        if (status) {
-            const statusArray = status.split(',');
-            query = query.in('status', statusArray);
+        if (!q || q.trim().length < 2) {
+            return res.status(400).json({ error: 'Search query must be at least 2 characters' });
         }
         
-        const { data, error } = await query;
+        const { data, error } = await supabase
+            .from('menu_items')
+            .select(`
+                *,
+                category:menu_categories(name)
+            `)
+            .eq('restaurant_id', restaurantId)
+            .ilike('name', `%${q}%`);
         
         if (error) throw error;
         
-        res.json({ success: true, orders: data });
+        res.json({ 
+            success: true, 
+            results: data,
+            count: data.length
+        });
         
     } catch (err) {
-        console.error('Get orders error:', err);
-        res.status(500).json({ error: 'Failed to get orders' });
+        console.error('Search error:', err);
+        res.status(500).json({ error: 'Search failed' });
     }
 });
 
-// ============================================
-// 7. GET RESTAURANT STATISTICS
-// ============================================
+// 10. GET RESTAURANT STATISTICS
 app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
     try {
         const { restaurantId } = req.params;
@@ -567,23 +842,58 @@ app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
 });
 
 // ============================================
-// SOCKET.IO CONNECTIONS
+// ORDER STATUS UPDATE LISTENER
 // ============================================
-io.on('connection', (socket) => {
-    console.log(`✅ KDS connected: ${socket.id}`);
-    console.log(`📺 Total connections: ${io.engine.clientsCount}`);
+if (supabase) {
+    console.log('📡 Setting up order status listener...');
     
-    socket.on('disconnect', () => {
-        console.log(`❌ KDS disconnected: ${socket.id}`);
-        console.log(`📺 Total connections: ${io.engine.clientsCount}`);
-    });
-});
+    supabase
+        .channel('order_status_updates')
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'orders'
+            },
+            async (payload) => {
+                const order = payload.new;
+                const oldOrder = payload.old;
+                
+                if (order.status !== oldOrder.status) {
+                    console.log(`📦 Order ${order.order_number} status: ${oldOrder.status} → ${order.status}`);
+                    
+                    const customerPhone = order.phone_number;
+                    const orderNumber = order.order_number;
+                    const newStatus = order.status;
+                    
+                    const statusMessage = getStatusMessage(newStatus, orderNumber);
+                    
+                    // Send WhatsApp notification
+                    if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
+                        await sendWhatsAppMessage(customerPhone, statusMessage);
+                    }
+                    
+                    // Broadcast to KDS
+                    io.emit('order_status_update', {
+                        id: order.id,
+                        orderNumber: orderNumber,
+                        status: newStatus,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+        )
+        .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('✅ Order status listener active');
+            }
+        });
+}
 
 // ============================================
 // START SERVER
 // ============================================
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📡 Socket.IO ready`);
-    console.log(`🔗 WhatsApp ${process.env.META_PHONE_ID ? 'enabled' : 'disabled'}`);
 });
