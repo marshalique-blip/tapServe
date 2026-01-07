@@ -2033,6 +2033,151 @@ function playNewOrderSound() {
             console.error('❌ Error processing status update:', error);
         }
     });  
+
+    // KDS MISSING FUNCTIONS FIX
+// Add this section before the "LOGOUT FUNCTION" section
+
+    // ============================================
+    // SETTINGS FUNCTIONS
+    // ============================================
+
+    function showSettings() {
+        loadSettingsUI();
+        document.getElementById('settingsModal').classList.add('active');
+    }
+
+    function closeSettings() {
+        saveSettings();
+        document.getElementById('settingsModal').classList.remove('active');
+    }
+
+    function toggleSetting(key) {
+        settings[key] = !settings[key];
+        const toggle = document.getElementById(`toggle-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`);
+        if (toggle) {
+            toggle.classList.toggle('active', settings[key]);
+        }
+        saveSettings();
+    }
+
+    function loadSettingsUI() {
+        Object.keys(settings).forEach(key => {
+            const toggle = document.getElementById(`toggle-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`);
+            if (toggle && typeof settings[key] === 'boolean') {
+                toggle.classList.toggle('active', settings[key]);
+            }
+        });
+        
+        document.getElementById('remote-promise-time').value = settings.remotePromiseTime;
+        document.getElementById('walkin-expect-time').value = settings.walkinExpectTime;
+        document.getElementById('gap-threshold').value = settings.gapThreshold;
+        document.getElementById('lock-threshold').value = settings.lockThreshold;
+        document.getElementById('load-trigger').value = settings.loadTrigger;
+        document.getElementById('delay-padding').value = settings.delayPadding;
+        document.getElementById('weekend-padding').value = settings.weekendPadding;
+        document.getElementById('card-width').value = settings.cardWidth;
+    }
+
+    function saveSettings() {
+        settings.remotePromiseTime = parseInt(document.getElementById('remote-promise-time').value);
+        settings.walkinExpectTime = parseInt(document.getElementById('walkin-expect-time').value);
+        settings.gapThreshold = parseInt(document.getElementById('gap-threshold').value);
+        settings.lockThreshold = parseInt(document.getElementById('lock-threshold').value);
+        settings.loadTrigger = parseInt(document.getElementById('load-trigger').value);
+        settings.delayPadding = parseInt(document.getElementById('delay-padding').value);
+        settings.weekendPadding = parseInt(document.getElementById('weekend-padding').value);
+        settings.cardWidth = parseInt(document.getElementById('card-width').value);
+        
+        localStorage.setItem('kds_settings', JSON.stringify(settings));
+        console.log('✅ Settings saved');
+    }
+
+    function loadSettings() {
+        const saved = localStorage.getItem('kds_settings');
+        if (saved) {
+            settings = { ...settings, ...JSON.parse(saved) };
+        }
+    }
+
+    function updateCardWidth() {
+        settings.cardWidth = parseInt(document.getElementById('card-width').value);
+        
+        const style = document.createElement('style');
+        style.id = 'dynamic-card-width';
+        const existingStyle = document.getElementById('dynamic-card-width');
+        if (existingStyle) existingStyle.remove();
+        
+        style.innerHTML = `
+            .order-card {
+                min-width: ${settings.cardWidth}px !important;
+                max-width: ${settings.cardWidth}px !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function resetToDefaults() {
+        if (confirm('Reset all settings to defaults?')) {
+            localStorage.removeItem('kds_settings');
+            location.reload();
+        }
+    }
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+
+    function testAudio() {
+        console.log('🧪 Testing all sounds...');
+        
+        alert('Testing 4 different sounds:\n\n1. New Order (rising beep)\n2. Overdue (warning buzz)\n3. Lock (lock sequence)\n4. High Load (deep alert)\n\nListen carefully!');
+        
+        playSound('new');
+        setTimeout(() => playSound('overdue'), 1000);
+        setTimeout(() => playSound('lock'), 2000);
+        setTimeout(() => playSound('load'), 3000);
+        
+        setTimeout(() => {
+            alert('✅ Audio test complete!\n\nIf you heard 4 different sounds, audio is working correctly.\n\nCheck console (F12) for any errors.');
+        }, 4000);
+        
+        console.log('✅ Test complete - check console for errors');
+    }
+
+    function addTestOrder() {
+        createTestOrder();
+    }
+
+    function showSearch() {
+        alert('🔍 Search functionality - Coming soon!\n\nThis will let you search orders by:\n• Order number\n• Customer name\n• Phone number\n• Items');
+    }
+
+    function showHistory() {
+        alert('📋 Order history - Coming soon!\n\nThis will show:\n• Completed orders\n• Average prep times\n• Performance metrics\n• Daily summaries');
+    }
+
+    function exportGapReport() {
+        alert('📥 Gap Report export - Coming soon!\n\nThis will export:\n• Promise times vs actual times\n• Late orders analysis\n• Performance trends\n• CSV format for Excel');
+    }
+
+    function resetSettings() {
+        resetToDefaults();
+    }
+
+    function clearAllOrders() {
+        if (confirm('⚠️ Clear all orders?\n\nThis will remove orders from the display but NOT delete them from the database.\n\nAre you sure?')) {
+            orders = [];
+            renderOrders();
+            updateLoadIndicator();
+            console.log('🗑️ Local orders cleared');
+        }
+    }
+
+    function refreshOrders() {
+        console.log('🔄 Manual refresh requested');
+        orders = []; // Clear local orders
+        fetchOrdersFromSupabase();
+    }
     
     // ← Close order_updated handler HERE
 
