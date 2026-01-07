@@ -216,7 +216,7 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
 app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const { customer_name, phone_number, order_type, items: orderItems, notes } = req.body;
+        const { customer_name, phone_number,user_input_number, order_type, items: orderItems, notes } = req.body;
         
         if (!customer_name || !phone_number || !orderItems || orderItems.length === 0) {
             return res.status(400).json({ 
