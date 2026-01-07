@@ -1390,7 +1390,7 @@
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
       
-      if (!customerName || !customerPhone || !deliveryAddress || !orderType) {
+      if (!customerName || !userInputNumber || !deliveryAddress || !orderType) {
         alert('Please fill in all required fields');
         return;
       }
