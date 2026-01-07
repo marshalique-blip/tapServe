@@ -208,7 +208,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         const { data: savedOrder, error: dbError } = await supabase
             .from('orders')
             .insert([{
-                //id: orderId,
+                id: orderId,
                 restaurant_id: restaurantId,
                 order_number: orderNumber,
                 customer_name: customer_name,
