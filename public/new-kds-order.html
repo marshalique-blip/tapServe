@@ -2208,12 +2208,13 @@ function playNewOrderSound() {
 
     document.addEventListener('orderDataUpdated', (event) => {
     const orderId = event.detail.id;
-    const buttons = document.querySelectorAll(`action-btn btn-start[data-order-id="${orderId}"], 
-            action-btn btn-ready[data-order-id="${orderId}"], action-btn btn-complete[data-order-id="${orderId}"],
-            item-check[data-order-id="${orderId}"]`
-        );
+    const buttons = document.querySelectorAll(`.action-btn.btn-start[data-order-id="${orderId}"], 
+    .action-btn.btn-ready[data-order-id="${orderId}"], 
+    .action-btn.btn-complete[data-order-id="${orderId}"],
+    .item-check[data-order-id="${orderId}"]`
+    );
             buttons.forEach(btn => btn.disabled = false);
-        console.log(`Order Id dfined: ${orderId}`);   
+        console.log(`Order Id dfined: ${orderId}`); 
         
     });
 
