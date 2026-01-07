@@ -1386,7 +1386,8 @@
       event.preventDefault();
       
       const customerName = document.getElementById('customerName').value.trim();
-      const customerPhone = document.getElementById('customerPhone').value.trim();
+      const customerPhone = document.getElementById('userWhatsapp').value.trim();
+      const userInputNumber = document.getElementById('customerPhone');
       const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
@@ -1417,6 +1418,7 @@
           body: JSON.stringify({
             customer_name: customerName,
             phone_number: customerPhone,
+            user_input_number: userInputNumber,
             order_type: orderType,
             items: items,
             notes: `Delivery: ${deliveryAddress} | ${specialNotes || 'No special instructions'}`
@@ -1505,7 +1507,7 @@
       setTimeout(() => {
           const whatsappBtn = document.getElementById('whatsappBtn');
           if (whatsappBtn) {
-              whatsappBtn.textContent = '💬 Open WhatsApp';
+              whatsappBtn.textContent = 'Done';
           }
       }, 2000);
     }
