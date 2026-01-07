@@ -895,6 +895,7 @@
         <form class="customer-form" id="customerForm">
           <div class="form-group">
             <input type="hidden" id="userWhatsapp" value="">
+            <input type='hidden' id="userInputNumber" value="">
             <label class="form-label">Full Name *</label>
             <input 
               type="text" 
@@ -1388,7 +1389,7 @@
       
       const customerName = document.getElementById('customerName').value.trim();
       const customerPhone = document.getElementById('userWhatsapp').value.trim();
-      const userInputNumber = document.getElementById('customerPhone');
+      const userInputNumber = document.getElementById('customerPhone').value.trim();
       const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
