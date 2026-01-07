@@ -715,6 +715,40 @@
       line-height: 1.6;
       margin-bottom: 24px;
     }
+
+    .countdown-text {
+    font-size: 14px;
+    color: #666;
+    margin-top: 16px;
+    font-weight: 600;
+}
+
+.countdown-number {
+    color: var(--primary);
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.whatsapp-btn {
+    width: 100%;
+    padding: 18px;
+    background: #25d366;
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.whatsapp-btn:hover {
+    background: #20ba5a;
+}
     
     /* ============================================ */
     /* LOADING STATE */
@@ -860,6 +894,7 @@
         <!-- Customer form -->
         <form class="customer-form" id="customerForm">
           <div class="form-group">
+            <input type="hidden" id="userWhatsapp" value="">
             <label class="form-label">Full Name *</label>
             <input 
               type="text" 
@@ -880,7 +915,7 @@
               required
             >
           </div>
-          
+                    
           <div class="form-group">
             <label class="form-label">Delivery Address *</label>
             <textarea 
@@ -939,25 +974,34 @@
   </div>
 
   <!-- SUCCESS MODAL -->
-  <div class="success-modal" id="successModal">
+<div class="success-modal" id="successModal">
     <div class="success-content">
-      <div class="success-icon">✓</div>
-      <h2 class="success-title">Order Confirmed!</h2>
-      
-      <div class="success-order-number">
-        <span>Order Number</span>
-        <strong id="modalOrderNumber">#UD0000</strong>
-      </div>
-      
-      <p class="success-message">
-        Thank you! We've received your order and you'll get a WhatsApp confirmation shortly.
-      </p>
-      
-      <button class="place-order-btn" onclick="location.reload()">
-        Order Again
-      </button>
+        <div class="success-icon">✓</div>
+        <h2 class="success-title">Order Confirmed!</h2>
+        
+        <div class="success-order-number">
+            <span>Order Number</span>
+            <strong id="modalOrderNumber">#UD0000</strong>
+        </div>
+        
+        <p class="success-message" id="successMessage">
+            Thank you! We've received your order and you'll get a WhatsApp confirmation shortly.
+        </p>
+        
+        <p class="countdown-text">
+            Redirecting to WhatsApp in <span class="countdown-number" id="countdownNumber">5</span> seconds...
+        </p>
+        
+        <button class="whatsapp-btn" id="whatsappBtn" onclick="openWhatsApp()">
+            Done
+        </button>
+        
+        <button class="place-order-btn" onclick="location.reload()" style="margin-top: 10px; background: #f5f5f5; color: #666;">
+            Place another order
+        </button>
     </div>
-  </div>
+</div>
+
 
   <script>
     // ============================================
@@ -1386,6 +1430,80 @@
       }
     }
     
+  // ============================================
+  // WHATSAPP REDIRECT WITH COUNTDOWN
+  // ============================================
+
+  let countdownInterval = null;
+  let userWhatsappNumber = '';
+  let currentOrderNumber = '';
+
+  function startWhatsAppCountdown(phoneNumber, orderNumber) {
+      userWhatsappNumber = phoneNumber;
+      currentOrderNumber = orderNumber;
+      
+      let seconds = 5;
+      const countdownEl = document.getElementById('countdownNumber');
+      
+      // Update countdown every second
+      countdownInterval = setInterval(() => {
+          seconds--;
+          
+          if (countdownEl) {
+              countdownEl.textContent = seconds;
+          }
+          
+          if (seconds <= 0) {
+              clearInterval(countdownInterval);
+              openWhatsApp();
+          }
+      }, 1000);
+  }
+
+  function openWhatsApp() {
+      if (countdownInterval) {
+          clearInterval(countdownInterval);
+      }
+      
+      // Format phone number (remove non-digits)
+      const cleanPhone = userWhatsappNumber.replace(/\D/g, '');
+      
+      // Create WhatsApp message
+      const message = encodeURIComponent(
+          `Hi! I just placed order #${currentOrderNumber}. ` +
+          `Can you confirm you received it?`
+      );
+      
+      // WhatsApp deep link
+      const whatsappURL = `https://wa.me`;
+      
+      console.log('📱 Opening WhatsApp:', whatsappURL);
+      
+      // Try to open WhatsApp
+      window.location.href = whatsappURL;
+      
+      // Fallback: If WhatsApp doesn't open, show reload button
+      setTimeout(() => {
+          const successMsg = document.getElementById('successMessage');
+          if (successMsg) {
+              successMsg.innerHTML = 
+                  '✅ Order confirmed!<br><br>' +
+                  'If WhatsApp didn\'t open, click the button below:';
+          }
+          
+          const whatsappBtn = document.getElementById('whatsappBtn');
+          if (whatsappBtn) {
+              whatsappBtn.textContent = '💬 Try Opening WhatsApp Again';
+          }
+      }, 2000);
+  }
+
+  function stopCountdown() {
+      if (countdownInterval) {
+          clearInterval(countdownInterval);
+      }
+  }
+
     // ============================================
     // SEARCH
     // ============================================
@@ -1409,6 +1527,42 @@
         section.style.display = visibleItems.length > 0 ? '' : 'none';
       });
     });
+
+    // ============================================
+// EXTRACT WHATSAPP NUMBER FROM URL
+// ============================================
+function getPhoneFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const phone = urlParams.get('phone');
+    
+    if (phone) {
+        console.log('📱 Phone extracted from URL:', phone);
+        return phone;
+    }
+    
+    return null;
+}
+
+// Auto-fill phone field on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const phoneFromURL = getPhoneFromURL();
+    
+    if (phoneFromURL) {
+        // Store in hidden field
+        const hiddenField = document.getElementById('userWhatsapp');
+        if (hiddenField) {
+            hiddenField.value = phoneFromURL;
+            console.log('✅ Phone stored:', phoneFromURL);
+        }
+        
+        // Also populate visible phone input
+        const phoneInput = document.getElementById('customerPhone');
+        if (phoneInput) {
+            phoneInput.value = phoneFromURL;
+            console.log('✅ Phone field pre-filled');
+        }
+    }
+});
     
     // ============================================
     // EVENT LISTENERS
