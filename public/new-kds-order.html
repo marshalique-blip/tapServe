@@ -1096,6 +1096,7 @@
     const CONFIG = {
         APPS_SCRIPT_URL: '',  // Not using
         NODEJS_URL: 'https://tapserve.onrender.com',
+        RESTAURANT_ID: '0fa03a81-6d4c-4d97-9e49-af73ddcbb449'
       //WHATSAPP_API: '',  // Not using
     };
 
@@ -1707,15 +1708,21 @@ function playNewOrderSound() {
         }
         
         try {
-            console.log('🔄 Fetching orders from:', `${CONFIG.NODEJS_URL}/api/orders`);
+            console.log('🔄 Fetching orders from:', `${CONFIG.NODEJS_URL}/api/restaurants/${CONFIG.RESTAURANT_ID}/orders`);
             
-            // Try new endpoint first
-            let response = await fetch(`${CONFIG.NODEJS_URL}/api/orders?status=new,preparing,ready`);
+            // PRIMARY: Try restaurant-specific endpoint
+            let response = await fetch(`${CONFIG.NODEJS_URL}/api/restaurants/${CONFIG.RESTAURANT_ID}/orders`);
             
-            // If that fails, try alternative endpoint
+            // FALLBACK 1: Try status-filtered endpoint
             if (!response.ok) {
-                console.log('⚠️ Trying alternative endpoint...');
-                response = await fetch(`${CONFIG.NODEJS_URL}/api/restaurants/0fa03a81-6d4c-4d97-9e49-af73ddcbb449/orders`);
+                console.log('⚠️ Trying status-filtered endpoint...');
+                response = await fetch(`${CONFIG.NODEJS_URL}/api/orders?status=new,preparing,ready`);
+            }
+            
+            // FALLBACK 2: Try all orders
+            if (!response.ok) {
+                console.log('⚠️ Trying all orders endpoint...');
+                response = await fetch(`${CONFIG.NODEJS_URL}/api/orders`);
             }
             
             if (!response.ok) {
@@ -1745,6 +1752,13 @@ function playNewOrderSound() {
                 console.log('ℹ️ No orders in database');
                 return;
             }
+            
+            // Filter only active orders (new, preparing, ready)
+            ordersArray = ordersArray.filter(order => 
+                ['new', 'preparing', 'ready'].includes(order.status?.toLowerCase())
+            );
+            
+            console.log(`✅ Active orders after filter: ${ordersArray.length}`);
             
             const fetchedOrders = ordersArray.map(dbOrder => {
                 // Parse items

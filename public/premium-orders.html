@@ -1007,7 +1007,7 @@
     // ============================================
     // CONFIGURATION
     // ============================================
-    const RESTAURANT_ID = '0fa03a81-6d4c-4d97-9e49-af73ddcbb449'; // Ultra Dine demo
+    const RESTAURANT_ID = 'xxxxx'; // Ultra Dine demo
     const API_BASE = window.location.origin;
     
     // ============================================
@@ -1461,48 +1461,29 @@
   }
 
   function openWhatsApp() {
-      if (countdownInterval) {
-          clearInterval(countdownInterval);
-      }
-      
-      // Format phone number (remove non-digits)
-      const cleanPhone = userWhatsappNumber.replace(/\D/g, '');
-      
-      // Create WhatsApp message
-      const message = encodeURIComponent(
-          `Hi! I just placed order #${currentOrderNumber}. ` +
-          `Can you confirm you received it?`
-      );
-      
-      // WhatsApp deep link
-      const whatsappURL = `https://wa.me/${cleanPhone}`;
-      
-      console.log('📱 Opening WhatsApp:', whatsappURL);
-      
-      // Try to open WhatsApp
-      window.location.href = whatsappURL;
-      
-      // Fallback: If WhatsApp doesn't open, show reload button
-      setTimeout(() => {
-          const successMsg = document.getElementById('successMessage');
-          if (successMsg) {
-              successMsg.innerHTML = 
-                  '✅ Order confirmed!<br><br>' +
-                  'If WhatsApp didn\'t open, click the button below:';
-          }
-          
-          const whatsappBtn = document.getElementById('whatsappBtn');
-          if (whatsappBtn) {
-              whatsappBtn.textContent = '💬 Try Opening WhatsApp Again';
-          }
-      }, 2000);
-  }
-
-  function stopCountdown() {
-      if (countdownInterval) {
-          clearInterval(countdownInterval);
-      }
-  }
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
+    
+    // Format phone number (remove non-digits)
+    const cleanPhone = userWhatsappNumber.replace(/\D/g, '');
+    
+    // WhatsApp deep link WITHOUT message
+    const whatsappURL = `https://wa.me/${cleanPhone}`;
+    
+    console.log('📱 Opening WhatsApp:', whatsappURL);
+    
+    // Open WhatsApp
+    window.location.href = whatsappURL;
+    
+    // Fallback: Update button text
+    setTimeout(() => {
+        const whatsappBtn = document.getElementById('whatsappBtn');
+        if (whatsappBtn) {
+            whatsappBtn.textContent = '💬 Open WhatsApp';
+        }
+    }, 2000);
+}
 
     // ============================================
     // SEARCH
