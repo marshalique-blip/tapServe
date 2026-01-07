@@ -1385,7 +1385,7 @@
       
       const customerName = document.getElementById('customerName').value.trim();
       const customerPhone = document.getElementById('userwhatsapp').value.trim();
-      const userInput = document.getElementById('customerPhone').value.trim();
+      const userInputNumber = document.getElementById('customerPhone').value.trim();
       const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
@@ -1416,7 +1416,7 @@
           body: JSON.stringify({
             customer_name: customerName,
             phone_number: customerPhone,
-            user_input: userInput,
+            user_input_number: userInputNumber,
             order_type: orderType,
             items: items,
             notes: `Delivery: ${deliveryAddress} | ${specialNotes || 'No special instructions'}`
