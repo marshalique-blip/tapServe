@@ -134,78 +134,172 @@ function getStatusMessage(status, orderNumber) {
 // ============================================
 // LEGACY ENDPOINT - EXISTING SYSTEM
 // ============================================
-app.post('/api/orders', async (req, res) => {
-    const orderData = req.body; 
-    const orderNumber = "SM" + Math.floor(1000 + Math.random() * 9000);
-    const orderId = uuidv4();
-
-    const itemDetails = orderData.orderItems
-        .map(item => `${item.name} x${item.quantity}`)
-        .join('\n');
-    
-    const plainTextMessage = `*Order #${orderNumber}*\n\nItems:\n${itemDetails}\n\nTotal: ${orderData.totalAmount}\nType: ${orderData.orderType}`;
-    const whatsappUpdate = `✅ Order confirmed!\n\n*Order# ${orderNumber}*\n\nItems:\n${itemDetails}\n\nTotal: ${orderData.totalAmount}\nType: ${orderData.orderType}`;
-    
-    console.log("📝 Order id generated:", orderId);
-    console.log("📢 New order broadcast:", orderNumber);
-
+app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
-        // Save to Supabase
+        const { restaurantId } = req.params;
+        const { customer_name, phone_number, order_type, items: orderItems, notes } = req.body;
+        
+        if (!customer_name || !phone_number || !orderItems || orderItems.length === 0) {
+            return res.status(400).json({ 
+                error: 'Missing required fields: customer_name, phone_number, items' 
+            });
+        }
+        
+        // Get restaurant settings for tax rate
+        const { data: restaurant, error: restError } = await supabase
+            .from('restaurants')
+            .select('settings, name')
+            .eq('id', restaurantId)
+            .single();
+        
+        if (restError) throw restError;
+        
+        const taxRate = restaurant.settings.tax_rate || 0;
+        const restaurantName = restaurant.name || 'Restaurant';
+        
+        // Fetch actual prices from database (prevent price manipulation)
+        const itemIds = orderItems.map(item => item.id);
+        const { data: menuItems, error: itemsError } = await supabase
+            .from('menu_items')
+            .select('id, name, price, is_available')
+            .eq('restaurant_id', restaurantId)
+            .in('id', itemIds);
+        
+        if (itemsError) throw itemsError;
+        
+        // Check if any items are unavailable
+        const unavailableItems = menuItems.filter(item => !item.is_available);
+        if (unavailableItems.length > 0) {
+            return res.status(400).json({ 
+                error: 'Some items are currently unavailable',
+                unavailable: unavailableItems.map(i => i.name)
+            });
+        }
+        
+        // Calculate order total using SERVER prices
+        let subtotal = 0;
+        const calculatedItems = orderItems.map(orderItem => {
+            const menuItem = menuItems.find(m => m.id === orderItem.id);
+            if (!menuItem) {
+                throw new Error(`Item ${orderItem.id} not found`);
+            }
+            
+            const quantity = parseInt(orderItem.quantity) || 1;
+            const itemTotal = menuItem.price * quantity;
+            subtotal += itemTotal;
+            
+            return {
+                id: menuItem.id,
+                name: menuItem.name,
+                price: menuItem.price,
+                quantity: quantity,
+                item_total: itemTotal
+            };
+        });
+        
+        const tax = subtotal * taxRate;
+        const total = subtotal + tax;
+        
+        // Generate order number
+        const orderNumber = "UD" + Math.floor(1000 + Math.random() * 9000);
+        const orderId = uuidv4();
+        
+        // Save order to database
         const { data: savedOrder, error: dbError } = await supabase
             .from('orders')
-            .insert([{ 
+            .insert([{
                 id: orderId,
+                restaurant_id: restaurantId,
                 order_number: orderNumber,
-                customer_name: orderData.customerName,
-                phone_number: orderData.phoneNumber,
-                user_input: orderData.userInput,
-                delivery_address: orderData.deliveryAddress,
-                order_source: orderData.orderType?.toLowerCase() || 'phone',
-                total_amount: orderData.totalAmount,
-                order_items: JSON.stringify(orderData.orderItems),
+                customer_name: customer_name,
+                phone_number: phone_number,
+                order_source: order_type?.toLowerCase() || 'walk-in',
+                order_items: JSON.stringify(calculatedItems),
+                total_amount: total.toFixed(2),
+                user_input: notes || '',
                 status: 'new'
             }])
             .select()
             .single();
-
+        
         if (dbError) throw dbError;
-
-        // Broadcast to KDS
-        io.emit('new-kds-order', { 
-            id: orderId,
-            orderNumber, 
-            ...orderData, 
-            plainTextMessage
-        });
-
-        // Send to Trello (if configured)
-        if (process.env.TRELLO_KEY && process.env.TRELLO_TOKEN) {
-            await axios.post(
-                `https://api.trello.com/1/cards?key=${process.env.TRELLO_KEY}&token=${process.env.TRELLO_TOKEN}`, 
-                {
-                    idList: process.env.TRELLO_LIST_ID,
-                    name: `Order #${orderNumber} - ${orderData.customerName}`,
-                    desc: plainTextMessage
-                }
-            ).catch(err => console.error('Trello error:', err.message));
-        }
-
-        // Send WhatsApp confirmation
+        
+        console.log(`✅ Order created: ${orderNumber} - $${total.toFixed(2)}`);
+        
+        // ============================================
+        // FIX 1: SEND IMMEDIATE WHATSAPP CONFIRMATION
+        // ============================================
         if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
-            await sendWhatsAppMessage(orderData.phoneNumber, whatsappUpdate);
+            const confirmationMessage = `✅ *Order Confirmed!*\n\n` +
+                `🏪 ${restaurantName}\n` +
+                `📋 Order #${orderNumber}\n\n` +
+                `*Your Order:*\n` +
+                calculatedItems.map(item => 
+                    `• ${item.name} x${item.quantity} - $${item.item_total.toFixed(2)}`
+                ).join('\n') +
+                `\n\n💰 *Total: $${total.toFixed(2)}*\n\n` +
+                `Thank you! We'll send you updates as your order is prepared.\n\n` +
+                `📱 You can contact us if you have any questions.`;
+            
+            // Send WhatsApp asynchronously (don't wait)
+            sendWhatsAppMessage(phone_number, confirmationMessage)
+                .then(result => {
+                    if (result.success) {
+                        console.log(`✅ WhatsApp confirmation sent to ${phone_number}`);
+                    } else {
+                        console.error(`❌ WhatsApp failed: ${result.error}`);
+                    }
+                })
+                .catch(err => {
+                    console.error(`❌ WhatsApp error:`, err);
+                });
+        } else {
+            console.warn('⚠️ WhatsApp not configured (missing META_PHONE_ID or META_ACCESS_TOKEN)');
         }
-
-        res.json({ success: true, orderNumber });
-
-    } catch (error) {
-        console.error("❌ Order error:", error.message);
-        res.status(200).json({ 
-            success: true, 
-            orderNumber, 
-            note: "Order sent to kitchen, but external automation had an issue." 
+        
+        // ============================================
+        // FIX 2: BROADCAST TO KDS WITH FULL DETAILS
+        // ============================================
+        io.emit('new-kds-order', {
+            id: orderId,
+            orderNumber: orderNumber,
+            customerName: customer_name,
+            phone: phone_number,
+            orderType: order_type || 'Walk-in',
+            items: calculatedItems,
+            subtotal: subtotal.toFixed(2),
+            tax: tax.toFixed(2),
+            total: total.toFixed(2),
+            status: 'new',
+            timestamp: new Date().toISOString(),
+            notes: notes || ''
         });
+        
+        console.log(`📡 KDS broadcast sent for order ${orderNumber}`);
+        
+        // Also log connected KDS clients
+        console.log(`📺 Connected KDS displays: ${io.engine.clientsCount}`);
+        
+        // Return response to client
+        res.json({
+            success: true,
+            order: {
+                id: orderId,
+                order_number: orderNumber,
+                items: calculatedItems,
+                subtotal: subtotal.toFixed(2),
+                tax: tax.toFixed(2),
+                total: total.toFixed(2),
+                tax_rate: (taxRate * 100).toFixed(1) + '%'
+            }
+        });
+        
+    } catch (err) {
+        console.error('Create order error:', err);
+        res.status(500).json({ error: err.message || 'Failed to create order' });
     }
 });
+
 
 // ============================================
 // MULTI-TENANT RESTAURANT APIS
