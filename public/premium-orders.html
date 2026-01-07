@@ -1029,7 +1029,7 @@
     // ============================================
     function getPhoneFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
-        const phone = urlParams.get('phone');
+        const phone = urlParams.get('wa_number');
         
         if (phone) {
             console.log('📱 Phone extracted from URL:', phone);
