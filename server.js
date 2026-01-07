@@ -292,6 +292,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 order_number: orderNumber,
                 customer_name: customer_name,
                 phone_number: phone_number,
+                user_input: user_input,
                 order_source: order_type?.toLowerCase() || 'walk-in',
                 order_items: JSON.stringify(calculatedItems),
                 total_amount: total.toFixed(2),
