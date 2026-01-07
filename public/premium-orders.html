@@ -1008,6 +1008,7 @@
     // CONFIGURATION
     // ============================================
     const RESTAURANT_ID = '0fa03a81-6d4c-4d97-9e49-af73ddcbb449'; // Ultra Dine demo
+    const chatNumber = '12462367556';
     const API_BASE = window.location.origin;
     
     // ============================================
@@ -1469,7 +1470,7 @@
     const cleanPhone = userWhatsappNumber.replace(/\D/g, '');
     
     // WhatsApp deep link WITHOUT message
-    const whatsappURL = `https://wa.me/${cleanPhone}`;
+    const whatsappURL = `https://wa.me/${chatNumber}`;
     
     console.log('📱 Opening WhatsApp:', whatsappURL);
     
