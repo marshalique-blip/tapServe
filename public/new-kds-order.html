@@ -1,0 +1,2015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="/socket.io/socket.io.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tap+serve KDS - Advanced Kitchen Display</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        /* Top Header */
+        .top-header {
+            background: #000;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+        }
+
+        .time-display {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: 2px solid #555;
+            color: #888;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex-start;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .icon-btn:hover {
+            background: #333;
+            color: #fff;
+            border-color: #fff;
+        }
+
+        .icon-btn.active {
+            background: #DC143C;
+            border-color: #DC143C;
+            color: white;
+        }
+
+        .logo {
+            color: #fff;
+            font-weight: 600;
+            font-size: 0px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        /* Load Indicator */
+        .load-indicator {
+            background: #0a0a0a;
+            padding: 10px 24px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .load-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .load-stat-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .load-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .load-stat-value.high {
+            color: #f44336;
+        }
+
+        .load-stat-value.medium {
+            color: #ff9800;
+        }
+
+        .load-stat-value.low {
+            color: #4caf50;
+        }
+
+        .load-bar {
+            flex: 1;
+            min-width: 200px;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .load-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #ff9800, #f44336);
+            transition: width 0.3s;
+        }
+
+        /* Filter Tabs */
+        .filter-tabs {
+            background: #000;
+            padding: 12px 24px;
+            display: flex;
+            gap: 10px;
+            border-bottom: 1px solid #333;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            padding: 10px 18px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #1a1a1a;
+            color: #888;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tab-btn.active {
+            background: #fff;
+            color: #000;
+            border-color: #fff;
+        }
+
+        .tab-btn.preparing.active {
+            background: #ff9800;
+            color: white;
+            border-color: #ff9800;
+        }
+
+        .tab-btn.ready.active {
+            background: #2196f3;
+            color: white;
+            border-color: #2196f3;
+        }
+
+        .tab-btn.new.active {
+            background: #4caf50;
+            color: white;
+            border-color: #4caf50;
+        }
+
+        .tab-btn.whatsapp.active {
+            background: #25d366;
+            color: white;
+            border-color: #25d366;
+        }
+
+        .tab-btn.phone.active {
+            background: #9c27b0;
+            color: white;
+            border-color: #9c27b0;
+        }
+
+        .tab-btn.walkin.active {
+            background: #ff4081;
+            color: white;
+            border-color: #ff4081;
+        }
+
+        /* Orders Container */
+        .orders-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            padding: 10px;
+            /* No max-height! */
+        }
+
+        /* Order Card */
+        .order-card {
+            min-width: 300px;
+            max-width: 300px;
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .order-card.locked {
+            border: 4px solid #ff0000;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.466);
+            animation: glow 2s infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.8); }
+        }
+
+        .order-card.gap-opportunity {
+            border-left: 6px solid #00bcd4;
+        }
+
+        /* Card Colors by Status */
+        .order-card.new {
+            border-left: 6px solid #4caf50;
+        }
+
+        .order-card.preparing {
+            border-left: 6px solid #ff9800;
+        }
+
+        .order-card.ready {
+            border-left: 6px solid #2196f3;
+        }
+
+        .order-card.overdue {
+            border-left: 6px solid #f44336;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Source Colors */
+        .order-card.whatsapp .order-number {
+            color: #25d366;
+        }
+
+        .order-card.phone .order-number {
+            color: #9c27b0;
+        }
+
+        .order-card.walkin .order-number {
+            color: #ff4081;
+        }
+
+        .order-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .order-number-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .order-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #000;
+        }
+
+        .order-source {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .lock-badge {
+            background: #ffd700;
+            color: #000;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            display: inline-block;
+            margin-left: 6px;
+        }
+
+        .timer-section {
+            text-align: right;
+        }
+
+        .timer {
+            font-size: 18px;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+
+        .timer.normal {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .timer.warning {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .timer.critical {
+            background: #ffebee;
+            color: #c62828;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.5; }
+        }
+
+        .promise-time {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .customer-info {
+            padding: 12px 16px;
+            background: #fafafa;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .customer-name {
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .order-items {
+            padding: 16px;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .order-item {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .item-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .item-check {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4caf50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .item-check.pending {
+            background: #e0e0e0;
+            color: #999;
+        }
+
+        .item-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #000;
+            flex: 1;
+        }
+
+        .item-quantity {
+            font-size: 15px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .order-actions {
+            padding: 16px;
+            background: #fafafa;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .btn-start {
+            background: #4caf50;
+            color: white;
+        }
+
+        .btn-ready {
+            background: #2196f3;
+            color: white;
+        }
+
+        .btn-complete {
+            background: #9c27b0;
+            color: white;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            overflow-y: auto;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: 700;
+            padding: 24px 24px 16px;
+            border-bottom: 2px solid #f0f0f0;
+            color: #000;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+
+        .settings-content {
+            padding: 24px;
+        }
+
+        .settings-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #DC143C;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #DC143C;
+        }
+
+        .setting-group {
+            margin-bottom: 20px;
+        }
+
+        .setting-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #333;
+            cursor: pointer;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .setting-label:hover {
+            background: #e9ecef;
+        }
+
+        .setting-label input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .setting-label select,
+        .setting-label input[type="number"] {
+            padding: 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            background: #ccc;
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #4caf50;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            left: 26px;
+        }
+
+        .setting-description {
+            font-size: 12px;
+            color: #666;
+            margin-top: 6px;
+            padding-left: 12px;
+            font-style: italic;
+        }
+
+        .setting-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .setting-btn.danger {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .setting-btn.danger:hover {
+            background: #c62828;
+            color: white;
+        }
+
+        .setting-btn.secondary {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .setting-btn.primary {
+            background: #DC143C;
+            color: white;
+        }
+
+        .modal-actions {
+            padding: 16px 24px;
+            border-top: 2px solid #f0f0f0;
+            display: flex;
+            justify-content: flex-end;
+            position: sticky;
+            bottom: 0;
+            background: white;
+        }
+
+        /* Analytics Panel */
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .analytics-card {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #DC143C;
+        }
+
+        .analytics-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .analytics-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #000;
+        }
+
+        .bottleneck-item {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+
+        .bottleneck-item strong {
+            color: #856404;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            width: 100%;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2a2a2a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-header">
+        <div class="time-display" id="currentTime">10:00 AM</div>
+        <div class="header-actions">
+            <button class="icon-btn" onclick="logout()" title="Logout">
+            <i class="fa-solid fa-arrow-right-from-bracket" style="color: #ffffff;"></i> 
+            Logout
+            </button>
+            <button class="icon-btn" onclick="clearAllOrders()" title="Clear All">
+            <i class="fa-regular fa-trash-can" style="color: #ffffff;"></i>Clear
+            </button>
+            <button class="icon-btn" onclick="refreshOrders()" title="Refresh">
+            <i class="fa-solid fa-rotate-right" style="color: #ffffff;"></i>Refresh
+            </button>
+            <button class="icon-btn" onclick="showSearch()" title="Search">
+            <i class="fa-solid fa-magnifying-glass" style="color: #ffffff;"></i>Search
+            </button>
+            <button class="icon-btn" onclick="showHistory()" title="History">
+            <i class="fa-regular fa-clipboard" style="color: #ffffff;"></i></i>History
+            </button>
+            <button class="icon-btn" onclick="addTestOrder()" title="Test Order">
+            <i class="fa-solid fa-plus" style="color: #ffffff;"></i></i>Test
+            </button>
+            <button class="icon-btn" onclick="resetSettings()" title="Reset">
+            <i class="fa-solid fa-arrow-rotate-left" style="color: #ffffff;"></i>Reset
+            </button>
+            <button class="icon-btn" onclick="showSettings()" title="Settings">
+            <i class="fa-solid fa-gear" style="color: #ffffff;"></i>Settings
+            </button>
+            <div class="logo">
+                <div id="connection-status" 
+         style="width: 12px; height: 12px; background: #ff4b2b; border-radius: 50%; margin-right: 8px; transition: 0.3s;" 
+         title="Disconnected"></div>
+                <span><img src= "https://raw.githubusercontent.com/parmar42/images/main/square-mouse-pointer%20(3).png" alt="logo">
+                </span><span style="font-size: 20px; font-weight: bolder; color:#08850e;">tap+serve</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="load-indicator">
+        <div class="load-stat">
+            <div class="load-stat-label">Kitchen Load</div>
+            <div class="load-stat-value" id="loadPercentage">0%</div>
+        </div>
+        <div class="load-bar">
+            <div class="load-bar-fill" id="loadBarFill" style="width: 0%"></div>
+        </div>
+        <div class="load-stat">
+            <div class="load-stat-label">Est. Wait</div>
+            <div class="load-stat-value" id="estWait">0 min</div>
+        </div>
+        <div class="load-stat">
+            <div class="load-stat-label">Active Orders</div>
+            <div class="load-stat-value" id="activeOrders">0</div>
+        </div>
+        <div class="load-stat">
+            <div class="load-stat-label">Bottleneck</div>
+            <div class="load-stat-value" id="bottleneck">None</div>
+        </div>
+    </div>
+
+    <div class="filter-tabs">
+        <button class="tab-btn active" data-filter="all" onclick="filterOrders('all')">All</button>
+        <button class="tab-btn preparing" data-filter="preparing" onclick="filterOrders('preparing')">Preparing</button>
+        <button class="tab-btn ready" data-filter="ready" onclick="filterOrders('ready')">Ready</button>
+        <button class="tab-btn new" data-filter="new" onclick="filterOrders('new')">New Orders</button>
+        <button class="tab-btn whatsapp" data-filter="whatsapp" onclick="filterOrders('whatsapp')">WhatsApp</button>
+        <button class="tab-btn phone" data-filter="phone" onclick="filterOrders('phone')">Phone</button>
+        <button class="tab-btn walkin" data-filter="walkin" onclick="filterOrders('walkin')">Walk-In</button>
+    </div>
+
+    <div class="orders-container" id="ordersContainer">
+        <div class="empty-state">
+            <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;">🍽️</div>
+            <div>No orders to display</div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h2 class="modal-header">⚙️ Advanced KDS Settings</h2>
+            <div class="settings-content">
+                
+                <!-- System Integration -->
+                <div class="settings-section">
+                    <div class="section-title">🔗 System Integration</div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Google Apps Script (Sheets)</span>
+                            <div class="toggle-switch" id="toggle-apps-script" onclick="toggleSetting('appsScript')"></div>
+                        </div>
+                        <div class="setting-description">Write orders to Google Sheets via Apps Script</div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Node.js / Supabase Database</span>
+                            <div class="toggle-switch" id="toggle-nodejs" onclick="toggleSetting('nodejs')"></div>
+                        </div>
+                        <div class="setting-description">Write orders to Supabase database via Node.js on Render</div>
+                    </div>
+                </div>
+
+                <!-- Weighted Queueing -->
+                <div class="settings-section">
+                    <div class="section-title">⚖️ Weighted Queueing (Buffer Logic)</div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Enable Intelligent Queue Management</span>
+                            <div class="toggle-switch active" id="toggle-weighted-queue" onclick="toggleSetting('weightedQueue')"></div>
+                        </div>
+                        <div class="setting-description">Optimize order sequence based on promise times and gaps</div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>WhatsApp/Phone Promise Time</span>
+                            <input type="number" id="remote-promise-time" value="20" min="5" max="60" style="width: 80px;"> min
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Walk-In Expectation Time</span>
+                            <input type="number" id="walkin-expect-time" value="10" min="5" max="30" style="width: 80px;"> min
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Gap Detection Threshold</span>
+                            <input type="number" id="gap-threshold" value="2" min="1" max="10" style="width: 80px;"> min
+                        </div>
+                        <div class="setting-description">Minimum gap size to insert walk-in orders</div>
+                    </div>
+                </div>
+
+                <!-- Anchor Tickets -->
+                <div class="settings-section">
+                    <div class="section-title">🔒 Anchor Tickets (Lock Protection)</div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Enable Order Anchoring</span>
+                            <div class="toggle-switch active" id="toggle-anchoring" onclick="toggleSetting('anchoring')"></div>
+                        </div>
+                        <div class="setting-description">Lock orders at 75% of promise time to prevent delays</div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Lock Threshold</span>
+                            <input type="number" id="lock-threshold" value="75" min="50" max="95" style="width: 80px;"> %
+                        </div>
+                        <div class="setting-description">Percentage of promise time before locking</div>
+                    </div>
+                </div>
+
+                <!-- Throttle Feedback -->
+                <div class="settings-section">
+                    <div class="section-title">📡 Auto-Throttle & Notifications</div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Auto-Throttle WhatsApp Bot</span>
+                            <div class="toggle-switch active" id="toggle-throttle-wa" onclick="toggleSetting('throttleWA')"></div>
+                        </div>
+                        <div class="setting-description">Update bot promise times when kitchen is overloaded</div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Notify Phone Host of Delays</span>
+                            <div class="toggle-switch active" id="toggle-notify-host" onclick="toggleSetting('notifyHost')"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Load Trigger Threshold</span>
+                            <input type="number" id="load-trigger" value="90" min="50" max="100" style="width: 80px;"> %
+                        </div>
+                        <div class="setting-description">Kitchen load % that triggers throttle</div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Delay Padding Amount</span>
+                            <input type="number" id="delay-padding" value="20" min="5" max="60" style="width: 80px;"> min
+                        </div>
+                        <div class="setting-description">Extra time added when throttled</div>
+                    </div>
+                </div>
+
+                <!-- Heat Map Predictor -->
+                <div class="settings-section">
+                    <div class="section-title">🗺️ Heat Map Predictor</div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Enable Weekend Offset</span>
+                            <div class="toggle-switch active" id="toggle-weekend-offset" onclick="toggleSetting('weekendOffset')"></div>
+                        </div>
+                        <div class="setting-description">Auto-pad promise times on Fri/Sat 6-9 PM</div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Weekend Padding</span>
+                            <input type="number" id="weekend-padding" value="8" min="0" max="30" style="width: 80px;"> min
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Peak Hours Offset</span>
+                            <div class="toggle-switch" id="toggle-peak-offset" onclick="toggleSetting('peakOffset')"></div>
+                        </div>
+                        <div class="setting-description">Adjust times during lunch/dinner rush</div>
+                    </div>
+                </div>
+
+                <!-- Audio Alerts -->
+                <div class="settings-section">
+                    <div class="section-title">🔊 Audio Alerts</div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>New Order Alert</span>
+                            <div class="toggle-switch active" id="toggle-alert-new" onclick="toggleSetting('alertNew')"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Past Due Alert</span>
+                            <div class="toggle-switch active" id="toggle-alert-overdue" onclick="toggleSetting('alertOverdue')"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Lock Alert</span>
+                            <div class="toggle-switch active" id="toggle-alert-lock" onclick="toggleSetting('alertLock')"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>High Load Alert</span>
+                            <div class="toggle-switch active" id="toggle-alert-load" onclick="toggleSetting('alertLoad')"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Display Settings -->
+                <div class="settings-section">
+                    <div class="section-title">🖥️ Display Settings</div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Card Width</span>
+                            <select id="card-width" onchange="updateCardWidth()">
+                                <option value="240">Small (240px)</option>
+                                <option value="280" selected>Medium (280px)</option>
+                                <option value="320">Large (320px)</option>
+                                <option value="360">X-Large (360px)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <div class="setting-label">
+                            <span>Auto-Refresh Timers</span>
+                            <div class="toggle-switch active" id="toggle-auto-refresh" onclick="toggleSetting('autoRefresh')"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics & Reports -->
+                <div class="settings-section">
+                    <div class="section-title">📊 Performance Analytics</div>
+                    
+                    <div class="analytics-grid">
+                        <div class="analytics-card">
+                            <div class="analytics-label">Avg Promise vs Actual</div>
+                            <div class="analytics-value" id="avg-gap">+2.3 min</div>
+                        </div>
+                        <div class="analytics-card">
+                            <div class="analytics-label">Orders Completed Today</div>
+                            <div class="analytics-value" id="completed-today">47</div>
+                        </div>
+                        <div class="analytics-card">
+                            <div class="analytics-label">On-Time Rate</div>
+                            <div class="analytics-value" id="ontime-rate">87%</div>
+                        </div>
+                        <div class="analytics-card">
+                            <div class="analytics-label">Avg Prep Time</div>
+                            <div class="analytics-value" id="avg-prep">18 min</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bottleneck-item">
+                        <strong>⚠️ Detected Bottleneck:</strong> Orders with "Fried Rice" are averaging 4 minutes late. Consider prep optimization.
+                    </div>
+                    
+                    <button class="setting-btn primary" onclick="exportGapReport()">
+                        📥 Export Gap Report (CSV)
+                    </button>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="settings-section">
+                    <div class="section-title" style="color: #c62828;">⚠️ Danger Zone</div>
+                    
+                    <button class="setting-btn danger" onclick="clearAllOrders()">
+                        🗑️ Clear All Orders
+                    </button>
+                    
+                    <button class="setting-btn secondary" onclick="resetToDefaults()">
+                        ↺ Reset All Settings to Defaults
+                    </button>
+                </div>
+
+            </div>
+            <div class="modal-actions">
+                <button class="action-btn btn-complete" onclick="closeSettings()">Save & Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ============================================
+    // AUTH CHECK - RUNS BEFORE ANYTHING ELSE
+    // ============================================
+
+    (function() {
+        const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours
+        
+        function checkAuth() {
+            const authData = localStorage.getItem('kds_auth');
+            
+            if (!authData) {
+                return false;
+            }
+            
+            try {
+                const parsed = JSON.parse(authData);
+                const now = Date.now();
+                
+                // Check if session expired
+                if (now - parsed.timestamp > SESSION_DURATION) {
+                    localStorage.removeItem('kds_auth');
+                    return false;
+                }
+                
+                return parsed.authenticated === true;
+            } catch (e) {
+                localStorage.removeItem('kds_auth');
+                return false;
+            }
+        }
+        
+        // Check auth immediately
+        if (!checkAuth()) {
+            // Not authenticated - redirect to login
+            console.log('🔒 Not authenticated - redirecting to login...');
+            window.location.replace('kds-login.html');
+            
+            // Stop page from loading
+            throw new Error('Authentication required');
+        }
+        
+        console.log('✅ Authenticated - loading KDS...');
+    })();
+
+
+    // ============================================
+    // CONFIGURATION & STATE
+    // ============================================
+
+    function handleNewOrderData(data) {
+        console.log('New order data received:', data);
+        // Process the new order data as needed
+        const event = new CustomEvent('orderDataUpdated', {
+            detail: {orderId: data.orderId
+        }       
+     });
+     document.dispatchEvent(event);
+
+    }
+
+
+    const CONFIG = {
+        APPS_SCRIPT_URL: '',  // Not using
+        NODEJS_URL: 'https://wa-orders.onrender.com',
+      //WHATSAPP_API: '',  // Not using
+    };
+
+    let orders = [];
+    let orderCounter = 23;
+    let currentFilter = 'all';
+    let completedToday = 0;
+
+    // Settings State
+    let settings = {
+        // Integration
+        appsScript: false,
+        nodejs: true,  // Must be ON for database persistence
+        
+        // Queue Management
+        weightedQueue: true,
+        remotePromiseTime: 20,
+        walkinExpectTime: 10,
+        gapThreshold: 2,
+        
+        // Anchoring
+        anchoring: true,
+        lockThreshold: 75,
+        
+        // Throttle
+        throttleWA: true,
+        notifyHost: true,
+        loadTrigger: 90,
+        delayPadding: 20,
+        
+        // Heat Map
+        weekendOffset: true,
+        weekendPadding: 8,
+        peakOffset: false,
+        
+        // Audio
+        alertNew: true,
+        alertOverdue: true,
+        alertLock: true,
+        alertLoad: true,
+        
+        // Display
+        cardWidth: 500,
+        autoRefresh: true
+    };
+
+    // Sample menu items
+    const menuItems = [
+        'Shrimp Fried Rice', 'Sweet & Sour Chicken', 'General Tso Chicken',
+        'Lo Mein', 'Sesame Chicken', 'Spring Rolls', 'Wonton Soup',
+        'Beef with Broccoli', 'Kung Pao Shrimp', 'Lemon Chicken'
+    ];
+
+    // ============================================
+    // CORE FUNCTIONS
+    // ============================================
+
+    function updateTime() {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        const displayMinutes = minutes.toString().padStart(2, '0');
+        document.getElementById('currentTime').textContent = 
+            `${displayHours}:${displayMinutes} ${ampm}`;
+    }
+
+    function formatTimer(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function playSound(type) {
+        if (!settings[`alert${type.charAt(0).toUpperCase() + type.slice(1)}`]) return;
+        
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        const frequencies = {
+            new: 800,
+            overdue: 600,
+            lock: 1000,
+            load: 400
+        };
+        
+        oscillator.frequency.value = frequencies[type] || 800;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.3);
+    }
+
+    function createTestOrder() {
+        const types = ['whatsapp', 'phone', 'walkin'];
+        const source = types[Math.floor(Math.random() * types.length)];
+        
+        const names = ['Kyle Johnson', 'Maria Garcia', 'James Wilson', 'Lisa Chen'];
+        const customer = names[Math.floor(Math.random() * names.length)];
+        const phone = '246-' + Math.floor(1000000 + Math.random() * 9000000);
+        
+        const numItems = Math.floor(Math.random() * 3) + 1;
+        const items = [];
+        
+        for (let i = 0; i < numItems; i++) {
+            const item = menuItems[Math.floor(Math.random() * menuItems.length)];
+            const qty = Math.floor(Math.random() * 2) + 1;
+            items.push({
+                name: item,
+                quantity: qty,
+                completed: false
+            });
+        }
+
+        const promiseTime = source === 'walkin' 
+            ? settings.walkinExpectTime 
+            : settings.remotePromiseTime;
+
+        const order = {
+            id: Date.now(),
+            number: orderCounter++,
+            source: source,
+            customer: customer,
+            phone: phone,
+            items: items,
+            status: 'new',
+            startTime: Date.now(),
+            promiseTime: promiseTime,
+            locked: false,
+            timer: 0,
+            orderNumber: 'EM' + orderCounter
+        };
+
+        orders.push(order);
+        playSound('new');
+        renderOrders();
+        updateLoadIndicator();
+    }
+
+    function updateTimers() {
+        const now = Date.now();
+        let needsFullRender = false;
+        
+        orders.forEach(order => {
+            order.timer = Math.floor((now - order.startTime) / 1000);
+            
+            if (settings.anchoring && !order.locked && order.source !== 'walkin') {
+                const elapsed = order.timer / 60;
+                const lockTime = (order.promiseTime * settings.lockThreshold) / 100;
+                
+                if (elapsed >= lockTime) {
+                    order.locked = true;
+                    playSound('lock');
+                    needsFullRender = true;  // Lock status changed - need full render
+                }
+            }
+            
+            if (order.timer / 60 > order.promiseTime && !order.alertedOverdue) {
+                order.alertedOverdue = true;
+                playSound('overdue');
+                needsFullRender = true;  // Overdue status changed - need full render
+            }
+        });
+        
+        // Only full re-render if lock or overdue status changed
+        if (needsFullRender) {
+            renderOrders();
+        } else {
+            // Just update timer displays without re-rendering
+            updateTimerDisplays();
+        }
+    }
+
+    // NEW FUNCTION: Update only timer elements
+    function updateTimerDisplays() {
+        orders.forEach(order => {
+            const orderCard = document.querySelector(`[data-order-id="${order.id}"]`);
+            if (!orderCard) return;
+            
+            const timerElement = orderCard.querySelector('.timer');
+            if (!timerElement) return;
+            
+            // Update timer text
+            timerElement.textContent = formatTimer(order.timer);
+            
+            // Update timer color class
+            const elapsed = order.timer / 60;
+            const progress = (elapsed / order.promiseTime) * 100;
+            
+            timerElement.className = 'timer';
+            if (progress >= 90) {
+                timerElement.classList.add('critical');
+            } else if (progress >= 75) {
+                timerElement.classList.add('warning');
+            } else {
+                timerElement.classList.add('normal');
+            }
+        });
+    }
+
+    function updateLoadIndicator() {
+        const totalOrders = orders.length;
+        const loadPercentage = Math.min(100, (totalOrders / 10) * 100);
+        
+        document.getElementById('loadPercentage').textContent = Math.round(loadPercentage) + '%';
+        document.getElementById('loadBarFill').style.width = loadPercentage + '%';
+        document.getElementById('activeOrders').textContent = totalOrders;
+        
+        const loadEl = document.getElementById('loadPercentage');
+        loadEl.className = 'load-stat-value';
+        if (loadPercentage >= 80) loadEl.classList.add('high');
+        else if (loadPercentage >= 50) loadEl.classList.add('medium');
+        else loadEl.classList.add('low');
+        
+        // Calculate estimated wait time
+        const avgPrepTime = totalOrders > 0 ? 15 + (totalOrders * 2) : 0;
+        document.getElementById('estWait').textContent = avgPrepTime + ' min';
+        
+        // Check for throttle trigger
+        if (settings.throttleWA && loadPercentage >= settings.loadTrigger) {
+            throttleSystem();
+        }
+    function throttleSystem() {
+    // Disabled - WhatsApp API not configured
+        console.log('⚠️ Throttle system disabled');
+    }
+    }
+
+   /* function throttleSystem() {
+        console.log('🚨 Kitchen overloaded - Throttling promise times');
+        
+        if (settings.throttleWA) {
+            fetch(CONFIG.WHATSAPP_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'update_promise_time',
+                    newTime: settings.remotePromiseTime + settings.delayPadding
+                })
+            }).catch(e => console.error('Throttle update failed:', e));
+        }
+        
+        playSound('load');
+    }
+    **/
+    // ============================================
+    // ORDER STATUS CHANGE - WITH DATABASE SYNC
+    // ============================================
+
+    async function changeStatus(orderId, newStatus) {
+    console.log('🔘 BUTTON CLICKED!');
+    console.log('Order ID:', orderId);
+    console.log('New Status:', newStatus);
+    console.log('Orders array:', orders);
+    
+    const order = orders.find(o => o.id === orderId);
+    
+    if (!order) {
+        console.error('❌ Order not found! ID:', orderId);
+        console.log('Available order IDs:', orders.map(o => o.id));
+        return;
+    }
+    
+    console.log(`📝 Found order: ${order.orderNumber || order.number}`);
+    console.log(`   Current status: ${order.status}`);
+    console.log(`   Changing to: ${newStatus}`);
+    
+    order.status = newStatus;
+    
+    // Update in Supabase
+    if (settings.nodejs && order.orderNumber) {
+        console.log('💾 Updating in Supabase...');
+         await updateOrderStatusInSupabase(order.id, newStatus);  // ← Use UUID instead
+    }
+    
+    if (newStatus === 'completed') {
+        completedToday++;
+        
+        const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
+        if (orderCard) {
+            orderCard.style.opacity = '0.5';
+            orderCard.style.transition = 'opacity 0.5s';
+        }
+        
+        setTimeout(() => {
+            orders = orders.filter(o => o.id !== orderId);
+            renderOrders();
+            updateLoadIndicator();
+        }, 2000);
+    } else {
+        console.log('🎨 Re-rendering orders...');
+        renderOrders();
+        updateLoadIndicator();
+    }
+    
+    console.log('✅ changeStatus complete!');
+    }
+    async function updateOrderStatusInSupabase(orderId, newStatus) {
+        try {
+            console.log(`🔄 Updating ${orderId} to ${newStatus} in Supabase...`);
+            
+            const response = await fetch(`${CONFIG.NODEJS_URL}/api/orders/${orderId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            
+            if (response.ok) {
+                console.log(`✅ Order ${orderId} updated in Supabase`);
+            } else {
+                console.error(`❌ Failed to update ${orderId}:`, response.status);
+            }
+        } catch (error) {
+            console.error(`❌ Error updating ${orderId}:`, error.message);
+        }
+    }
+
+    // ============================================
+    // RENDER ORDERS
+    // ============================================
+
+    function renderOrders() {
+        const container = document.getElementById('ordersContainer');
+        let filteredOrders = orders;
+        
+        // Apply filters
+        if (currentFilter === 'new') {
+            filteredOrders = orders.filter(o => o.status === 'new');
+        } else if (currentFilter === 'preparing') {
+            filteredOrders = orders.filter(o => o.status === 'preparing');
+        } else if (currentFilter === 'ready') {
+            filteredOrders = orders.filter(o => o.status === 'ready');
+        } else if (['whatsapp', 'phone', 'walkin'].includes(currentFilter)) {
+            filteredOrders = orders.filter(o => o.source === currentFilter);
+        }
+         
+        // Apply weighted queueing sort
+        if (settings.weightedQueue) {
+            filteredOrders = applyWeightedQueue(filteredOrders);
+        } else {
+            filteredOrders.sort((a, b) => a.startTime - b.startTime);
+        }
+        
+        if (filteredOrders.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;">🍽️</div>
+                    <div>No orders to display</div>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = filteredOrders.map(order => {
+            const elapsed = order.timer / 60;
+            const isOverdue = elapsed > order.promiseTime;
+            const progress = (elapsed / order.promiseTime) * 100;
+            
+            let timerClass = 'normal';
+            if (progress >= 90) timerClass = 'critical';
+            else if (progress >= 75) timerClass = 'warning';
+            
+            let cardClasses = `order-card ${order.source} ${order.status}`;
+            if (order.locked) cardClasses += ' locked';
+            if (isOverdue) cardClasses += ' overdue';
+            
+            let actionButtons = '';
+            if (order.status === 'new') {
+                actionButtons = `<button class="action-btn btn-start">Start Cooking</button>`;
+            } else if (order.status === 'preparing') {
+                actionButtons = `<button class="action-btn btn-ready">Mark Ready</button>`;
+            } else if (order.status === 'ready') {
+                actionButtons = `<button class="action-btn btn-complete">Complete</button>`;
+            }
+            
+            return `
+                <div class="${cardClasses}" data-order-id="${order.id}">
+                     <div class="order-header">
+                        <div class="order-number-section">
+                            <div class="order-number">
+                                ${order.orderNumber}
+                                ${order.locked ? '<span class="lock-badge">🔒 LOCKED</span>' : ''}
+                            </div>
+                            <div class="order-source">
+                                ${order.source === 'whatsapp' ? '💬' : order.source === 'phone' ? '📞' : '🚶'} ${order.source.toUpperCase()}
+                            </div>
+                        </div>
+                        <div class="timer-section">
+                            <div class="timer ${timerClass}">${formatTimer(order.timer)}</div>
+                            <div class="promise-time">Promise: ${order.promiseTime} min</div>
+                        </div>
+                    </div>
+                    
+                    <div class="customer-info">
+                        <div class="customer-name">👤 ${order.customer}</div>
+                        <div style="font-size: 12px; color: #999; margin-top: 4px;">${order.phone}</div>
+                    </div>
+                    
+                    <div class="order-items">
+                        ${order.items.map((item, idx) => `
+                            <div class="order-item">
+                                <div class="item-header">
+                                   <div class="item-check ${item.completed ? '' : 'pending'}" 
+                                    data-order-id="${order.id}" 
+                                    data-item-index="${idx}">
+                                    ${item.completed ? '✓' : '○'}
+                                    </div>
+                                    <div class="item-name">${item.name}</div>
+                                    <div class="item-quantity">${item.quantity}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="order-actions">
+                        ${actionButtons}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        attachButtonListeners();
+        
+    }
+
+    function attachButtonListeners() {
+        document.querySelectorAll('.btn-start').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const card = e.target.closest('.order-card');
+                const orderId = card.dataset.orderId;
+                console.log('🟢 Start clicked for order:', orderId);
+                changeStatus(orderId, 'preparing');
+            });
+        });
+    
+        document.querySelectorAll('.btn-ready').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const card = e.target.closest('.order-card');
+                const orderId = card.dataset.orderId;
+                console.log('🟠 Ready clicked for order:', orderId);
+                changeStatus(orderId, 'ready');
+            });
+        });
+    
+        document.querySelectorAll('.btn-complete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const card = e.target.closest('.order-card');
+                const orderId = card.dataset.orderId;
+                console.log('🔵 Complete clicked for order:', orderId);
+                changeStatus(orderId, 'completed');
+            });
+        });
+    
+
+        // ADD THIS: Item checkboxes
+        document.querySelectorAll('.item-check').forEach(checkbox => {
+            checkbox.addEventListener('click', (e) => {
+                const orderId = e.target.dataset.orderId;
+                const itemIndex = parseInt(e.target.dataset.itemIndex);
+                
+                console.log('📋 Item toggled:', orderId, itemIndex);
+                toggleItemComplete(orderId, itemIndex);
+            });
+        });
+        
+        console.log('✅ Attached listeners to', 
+            document.querySelectorAll('.btn-start, .btn-ready, .btn-complete').length, 
+            'buttons and',
+            document.querySelectorAll('.item-check').length,
+            'checkboxes');
+    }
+    
+    
+    function applyWeightedQueue(ordersArray) {
+        const locked = ordersArray.filter(o => o.locked);
+        const unlocked = ordersArray.filter(o => !o.locked);
+        
+        unlocked.sort((a, b) => {
+            const aUrgency = (a.timer / 60) / a.promiseTime;
+            const bUrgency = (b.timer / 60) / b.promiseTime;
+            return bUrgency - aUrgency;
+        });
+        
+        return [...locked, ...unlocked];
+    }
+
+    function toggleItemComplete(orderId, itemIndex) {
+        const order = orders.find(o => o.id === orderId);
+        if (order) {
+            order.items[itemIndex].completed = !order.items[itemIndex].completed;
+            renderOrders();
+        }
+    }
+
+    function filterOrders(filter) {
+        currentFilter = filter;
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.filter === filter);
+        });
+        renderOrders();
+    }
+
+    // ============================================
+    // FETCH ORDERS FROM SUPABASE
+    // ============================================
+
+    async function fetchOrdersFromSupabase() {
+        if (!settings.nodejs) {
+            console.log('⚠️ Node.js integration disabled');
+            return;
+        }
+        
+        try {
+            console.log('🔄 Fetching orders from Supabase...');
+            
+            const response = await fetch(`${CONFIG.NODEJS_URL}/api/orders?status=new,preparing,ready&limit=50`);
+            
+            if (!response.ok) {
+                console.error(`❌ HTTP Error: ${response.status}`);
+                return;
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.orders) {
+                console.log(`✅ Loaded ${data.orders.length} orders from database`);
+                
+                const fetchedOrders = data.orders.map(dbOrder => {
+                    let items = [];
+                    
+                    if (typeof dbOrder.order_items === 'string') {
+                        try {
+                            items = JSON.parse(dbOrder.order_items);
+                        } catch (e) {
+                            items = [{name: dbOrder.order_items, quantity: 1, completed: false}];
+                        }
+                    } else {
+                        items = dbOrder.order_items || [];
+                    }
+                    
+                    items = items.map(item => ({
+                        name: item.name || 'Unknown',
+                        quantity: item.quantity || 1,
+                        completed: item.completed || false
+                    }));
+                    
+                    return {
+                        id: dbOrder.id,
+                        number: parseInt((dbOrder.order_number || '0').replace(/\D/g, '')) || Date.now(),
+                        source: dbOrder.order_source || 'phone',
+                        customer: dbOrder.customer_name || 'Unknown',
+                        phone: dbOrder.phone_number || '',
+                        items: items,
+                        status: dbOrder.status || 'new',
+                        startTime: new Date(dbOrder.created_at).getTime(),
+                        promiseTime: dbOrder.promise_time || 20,
+                        locked: dbOrder.locked || false,
+                        timer: Math.floor((Date.now() - new Date(dbOrder.created_at).getTime()) / 1000),
+                        orderNumber: dbOrder.order_number
+                    };
+                });
+                
+                orders = fetchedOrders;
+                
+                console.log(`🎨 Rendering ${orders.length} orders`);
+                renderOrders();
+                updateLoadIndicator();
+                
+            } else {
+                console.log('⚠️ No orders returned from database');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to fetch orders:', error.message);
+        }
+    }
+
+    // ============================================
+    // SETTINGS FUNCTIONS
+    // ============================================
+
+    function showSettings() {
+        loadSettingsUI();
+        document.getElementById('settingsModal').classList.add('active');
+    }
+
+    function closeSettings() {
+        saveSettings();
+        document.getElementById('settingsModal').classList.remove('active');
+    }
+
+    function toggleSetting(key) {
+        settings[key] = !settings[key];
+        const toggle = document.getElementById(`toggle-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`);
+        if (toggle) {
+            toggle.classList.toggle('active', settings[key]);
+        }
+        saveSettings();
+    }
+
+    function loadSettingsUI() {
+        Object.keys(settings).forEach(key => {
+            const toggle = document.getElementById(`toggle-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`);
+            if (toggle && typeof settings[key] === 'boolean') {
+                toggle.classList.toggle('active', settings[key]);
+            }
+        });
+        
+        document.getElementById('remote-promise-time').value = settings.remotePromiseTime;
+        document.getElementById('walkin-expect-time').value = settings.walkinExpectTime;
+        document.getElementById('gap-threshold').value = settings.gapThreshold;
+        document.getElementById('lock-threshold').value = settings.lockThreshold;
+        document.getElementById('load-trigger').value = settings.loadTrigger;
+        document.getElementById('delay-padding').value = settings.delayPadding;
+        document.getElementById('weekend-padding').value = settings.weekendPadding;
+        document.getElementById('card-width').value = settings.cardWidth;
+    }
+
+    function saveSettings() {
+        settings.remotePromiseTime = parseInt(document.getElementById('remote-promise-time').value);
+        settings.walkinExpectTime = parseInt(document.getElementById('walkin-expect-time').value);
+        settings.gapThreshold = parseInt(document.getElementById('gap-threshold').value);
+        settings.lockThreshold = parseInt(document.getElementById('lock-threshold').value);
+        settings.loadTrigger = parseInt(document.getElementById('load-trigger').value);
+        settings.delayPadding = parseInt(document.getElementById('delay-padding').value);
+        settings.weekendPadding = parseInt(document.getElementById('weekend-padding').value);
+        settings.cardWidth = parseInt(document.getElementById('card-width').value);
+        
+        localStorage.setItem('kds_settings', JSON.stringify(settings));
+        console.log('✅ Settings saved');
+    }
+
+    function loadSettings() {
+        const saved = localStorage.getItem('kds_settings');
+        if (saved) {
+            settings = { ...settings, ...JSON.parse(saved) };
+        }
+    }
+
+    function updateCardWidth() {
+        settings.cardWidth = parseInt(document.getElementById('card-width').value);
+        
+        const style = document.createElement('style');
+        style.id = 'dynamic-card-width';
+        const existingStyle = document.getElementById('dynamic-card-width');
+        if (existingStyle) existingStyle.remove();
+        
+        style.innerHTML = `
+            .order-card {
+                min-width: ${settings.cardWidth}px !important;
+                max-width: ${settings.cardWidth}px !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function resetToDefaults() {
+        if (confirm('Reset all settings to defaults?')) {
+            localStorage.removeItem('kds_settings');
+            location.reload();
+        }
+    }
+
+    function clearAllOrders() {
+        if (confirm('Clear all orders? This will NOT delete from database.')) {
+            orders = [];
+            renderOrders();
+            updateLoadIndicator();
+        }
+    }
+
+    function refreshOrders() {
+        console.log('🔄 Manual refresh');
+        fetchOrdersFromSupabase();
+    }
+
+    function showSearch() {
+        alert('Search functionality - Coming soon!');
+    }
+
+    function showHistory() {
+        alert('Order history - Coming soon!');
+    }
+
+    function exportGapReport() {
+        alert('Gap Report export - Coming soon!');
+    }
+
+    function addTestOrder() {
+        createTestOrder();
+    }
+
+    function resetSettings() {
+        resetToDefaults();
+    }
+
+    // ============================================
+    // SOCKET.IO CONNECTION
+    // ============================================
+
+    const socket = io(CONFIG.NODEJS_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5
+    });
+
+    socket.on('connect', () => {
+        const statusDot = document.getElementById('connection-status');
+        if (statusDot) {
+            statusDot.style.background = '#4caf50';
+            statusDot.title = 'Connected to Server';
+        }
+        console.log('✅ Socket Connected:', socket.id);
+        
+        fetchOrdersFromSupabase();
+    });
+
+    socket.on('disconnect', () => {
+        const statusDot = document.getElementById('connection-status');
+        if (statusDot) {
+            statusDot.style.background = '#ff4b2b';
+            statusDot.title = 'Disconnected - Check Internet';
+        }
+        console.log('🔴 Socket Disconnected');
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('❌ Socket Connection Error:', error.message);
+    });
+
+    //===========================================
+    // Listen for new orders (Tap+Serve format)
+    //===========================================
+    /*
+    socket.on('new_order', (receivedData) => {
+        console.log('🎯 NEW ORDER EVENT:', receivedData);
+        
+        try {
+            const orderData = Array.isArray(receivedData) ? receivedData[0] : receivedData;
+            
+            let itemsArray = [];
+            if (orderData.items && Array.isArray(orderData.items)) {
+                itemsArray = orderData.items.map(item => ({
+                    name: item.name || 'Unknown Item',
+                    quantity: item.quantity || 1,
+                    completed: false
+                }));
+            }
+            
+            const newOrder = {
+                id: orderData.id,
+                number: orderData.orderNumber ? parseInt(orderData.orderNumber.replace(/\D/g, '')) : orderCounter++,
+                source: orderData.source || 'phone',
+                customer: orderData.customer || orderData.customerName || 'Guest',
+                phone: orderData.phone || orderData.phoneNumber || '',
+                items: itemsArray,
+                status: 'new',
+                startTime: Date.now(),
+                promiseTime: orderData.promiseTime || 20,
+                locked: false,
+                timer: 0,
+                orderNumber: orderData.orderNumber || 'EM' + Date.now()
+            };
+            
+            const existingIndex = orders.findIndex(o => o.orderNumber === newOrder.orderNumber);
+            if (existingIndex === -1) {
+                console.log('📊 Adding order:', newOrder.orderNumber);
+                orders.push(newOrder);
+                playSound('new');
+                renderOrders();
+                updateLoadIndicator();
+                console.log('✅ Order added! Total:', orders.length);
+            } else {
+                console.log('⚠️ Order already exists');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error processing order:', error);
+        }
+    });  // ← Close new_order handler HERE
+        **/
+        // Listen for legacy format
+    socket.on('new-kds-order', (data) => {
+        console.log('📥 LEGACY ORDER:', data);
+        
+        try {
+            const formattedItems = (data.orderItems || []).map(item => ({
+                name: item.name || item,
+                quantity: item.quantity || 1,
+                completed: false
+            }));
+
+            const promiseTime = data.orderType === 'Walk-In' 
+                ? settings.walkinExpectTime 
+                : settings.remotePromiseTime;
+
+            const newOrder = {
+                id: data.id,
+                number: data.orderNumber ? parseInt(data.orderNumber.replace(/\D/g, '')) : orderCounter++,
+                source: data.orderType ? data.orderType.toLowerCase().replace(' ', '') : 'phone',
+                customer: data.customerName || 'Guest',
+                phone: data.phoneNumber || '',
+                items: formattedItems,
+                status: 'new',
+                startTime: Date.now(),
+                promiseTime: promiseTime,
+                locked: false,
+                timer: 0,
+                orderNumber: data.orderNumber
+            };
+
+                
+
+            const existingIndex = orders.findIndex(o => o.orderNumber === newOrder.orderNumber);
+            if (existingIndex === -1) {
+                orders.push(newOrder);
+                playSound('new');
+                renderOrders();
+                updateLoadIndicator();
+                console.log('✅ Legacy order added!');
+                console.log('🆔 Order ID extracted from newOrder.id:', newOrder.id);
+            }
+            
+        } catch (error) {
+            console.error('❌ Legacy order error:', error);
+        }
+    });  // ← Close new-kds-order handler HERE
+    
+    
+    // Listen for order status updates from other KDS displays
+    socket.on('order_updated', (updateData) => {
+        console.log('📡 Order status update received:', updateData);
+        
+        try {
+            const order = orders.find(o => o.id === updateData.orderId);
+            
+            if (order) {
+                console.log(`🔄 Updating ${order.orderNumber} from ${order.status} to ${updateData.status}`);
+                
+                order.status = updateData.status;
+                
+                if (updateData.status === 'completed') {
+                    const orderCard = document.querySelector(`[data-order-id="${order.id}"]`);
+                    if (orderCard) {
+                        orderCard.style.opacity = '0.5';
+                        orderCard.style.transition = 'opacity 0.5s';
+                    }
+                    
+                    setTimeout(() => {
+                        orders = orders.filter(o => o.id !== order.id);
+                        renderOrders();
+                        updateLoadIndicator();
+                    }, 2000);
+                } else {
+                    renderOrders();
+                    updateLoadIndicator();
+                }
+                
+                console.log('✅ Local display updated');
+            } else {
+                console.log('⚠️ Order not found in local array');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error processing status update:', error);
+        }
+    });  
+    
+    // ← Close order_updated handler HERE
+
+    // ============================================
+    // LOGOUT FUNCTION  
+    // ============================================
+    function logout() {
+        if (confirm('Are you sure you want to logout?')) {
+            localStorage.removeItem('kds_auth');
+            window.location.replace('kds-login.html');
+        }
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+
+    loadSettings();
+    updateTime();
+    setInterval(updateTime, 1000);
+    setInterval(() => {
+        if (settings.autoRefresh) {
+            updateTimers();
+        }
+    }, 1000);
+
+    console.log('🍜 Tap+Serve KDS Initialized');
+
+    document.addEventListener('orderDataUpdated', (event) => {
+    const orderId = event.detail.id;
+    const buttons = document.querySelectorAll(`action-btn btn-start[data-order-id="${orderId}"], 
+            action-btn btn-ready[data-order-id="${orderId}"], action-btn btn-complete[data-order-id="${orderId}"],
+            item-check[data-order-id="${orderId}"]`
+        );
+            buttons.forEach(btn => btn.disabled = false);
+        console.log(`Order Id dfined: ${orderId}`);   
+        
+    });
+
+
+
+    </script>
+</body>
+</html>
