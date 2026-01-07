@@ -1384,13 +1384,13 @@
       event.preventDefault();
       
       const customerName = document.getElementById('customerName').value.trim();
-      const customerPhone = document.getElementById('userWhatsapp').value.trim();
+      const whatsappPhone = document.getElementById('userWhatsapp').value.trim();
       const userInputNumber = document.getElementById('customerPhone').value.trim();
       const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
       
-      if (!customerName || !userInputNumber || !deliveryAddress || !orderType) {
+      if (!customerName || !customerPhone || !deliveryAddress || !orderType) {
         alert('Please fill in all required fields');
         return;
       }
@@ -1415,7 +1415,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customer_name: customerName,
-            phone_number: customerPhone,
+            phone_number: whatsappPhone,
             user_input_number: userInputNumber,
             order_type: orderType,
             items: items,
