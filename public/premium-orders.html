@@ -1384,7 +1384,8 @@
       event.preventDefault();
       
       const customerName = document.getElementById('customerName').value.trim();
-      const customerPhone = document.getElementById('customerPhone').value.trim();
+      const customerPhone = document.getElementById('userwhatsapp').value.trim();
+      const userInput = document.getElementById('customerPhone').value.trim();
       const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
@@ -1415,6 +1416,7 @@
           body: JSON.stringify({
             customer_name: customerName,
             phone_number: customerPhone,
+            user_input: userInput
             order_type: orderType,
             items: items,
             notes: `Delivery: ${deliveryAddress} | ${specialNotes || 'No special instructions'}`
@@ -1491,7 +1493,7 @@
       const cleanPhone = RESTAURANT_WHATSAPP.replace(/\D/g, '');
       
       // WhatsApp deep link to restaurant chat (NO message)
-      const whatsappURL = `https://wa.me/${cleanPhone}`;
+      const whatsappURL = `https://wa.me/${chatNumber}`;
       
       console.log('📱 Opening restaurant WhatsApp:', whatsappURL);
       console.log('📞 Restaurant number:', cleanPhone);
