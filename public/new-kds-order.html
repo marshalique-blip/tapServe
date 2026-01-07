@@ -720,6 +720,9 @@
             <button class="icon-btn" onclick="resetSettings()" title="Reset">
             <i class="fa-solid fa-arrow-rotate-left" style="color: #ffffff;"></i>Reset
             </button>
+            <button class="icon-btn" onclick="testAudio()" title="Test Audio">
+            <i class="fa-solid fa-volume-high"></i> Test Audio
+            </button>
             <button class="icon-btn" onclick="showSettings()" title="Settings">
             <i class="fa-solid fa-gear" style="color: #ffffff;"></i>Settings
             </button>
@@ -1167,32 +1170,122 @@
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
-    function playSound(type) {
-        if (!settings[`alert${type.charAt(0).toUpperCase() + type.slice(1)}`]) return;
+    // Audio context - created once
+let audioContext = null;
+
+function initAudioContext() {
+    if (!audioContext) {
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('✅ Audio context created');
+        } catch (e) {
+            console.error('❌ Audio context failed:', e);
+        }
+    }
+    return audioContext;
+}
+
+// Initialize on first user interaction
+document.addEventListener('click', () => {
+    initAudioContext();
+}, { once: true });
+
+async function playSound(type) {
+    const settingKey = `alert${type.charAt(0).toUpperCase() + type.slice(1)}`;
+    if (!settings[settingKey]) {
+        console.log(`🔇 Sound disabled for: ${type}`);
+        return;
+    }
+    
+    try {
+        const ctx = initAudioContext();
+        if (!ctx) {
+            console.error('❌ No audio context');
+            return;
+        }
         
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+        // Resume context if suspended
+        if (ctx.state === 'suspended') {
+            await ctx.resume();
+        }
+        
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
         
         oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+        gainNode.connect(ctx.destination);
         
-        const frequencies = {
-            new: 800,
-            overdue: 600,
-            lock: 1000,
-            load: 400
+        // Different sounds for different events
+        const sounds = {
+            new: {
+                freq: [800, 1000, 1200],
+                duration: 0.15,
+                type: 'sine'
+            },
+            overdue: {
+                freq: [400, 400],
+                duration: 0.3,
+                type: 'square'
+            },
+            lock: {
+                freq: [600, 800, 600],
+                duration: 0.1,
+                type: 'triangle'
+            },
+            load: {
+                freq: [300, 250],
+                duration: 0.4,
+                type: 'sawtooth'
+            }
         };
         
-        oscillator.frequency.value = frequencies[type] || 800;
-        oscillator.type = 'sine';
+        const sound = sounds[type] || sounds.new;
+        oscillator.type = sound.type;
         
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        const now = ctx.currentTime;
+        let currentTime = now;
         
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.3);
+        // Play sequence of notes
+        sound.freq.forEach((freq, i) => {
+            if (i === 0) {
+                oscillator.frequency.setValueAtTime(freq, currentTime);
+            } else {
+                oscillator.frequency.exponentialRampToValueAtTime(freq, currentTime);
+            }
+            currentTime += sound.duration;
+        });
+        
+        // Envelope
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + (sound.duration * sound.freq.length));
+        
+        oscillator.start(now);
+        oscillator.stop(now + (sound.duration * sound.freq.length));
+        
+        console.log(`🔊 Played sound: ${type}`);
+        
+    } catch (error) {
+        console.error(`❌ Sound error (${type}):`, error);
     }
+}
+
+// Separate function for new order sound with fallback
+function playNewOrderSound() {
+    console.log('🔔 Playing new order sound...');
+    
+    // Try advanced sound
+    playSound('new');
+    
+    // Fallback: Try HTML5 audio
+    try {
+        const beep = new Audio('data:audio/wav;base64,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');
+        beep.volume = 0.3;
+        beep.play().catch(e => console.log('Beep failed:', e));
+    } catch (e) {
+        console.log('Fallback beep failed:', e);
+    }
+}
 
     function createTestOrder() {
         const types = ['whatsapp', 'phone', 'walkin'];
@@ -1614,187 +1707,111 @@
         }
         
         try {
-            console.log('🔄 Fetching orders from Supabase...');
+            console.log('🔄 Fetching orders from:', `${CONFIG.NODEJS_URL}/api/orders`);
             
-            const response = await fetch(`${CONFIG.NODEJS_URL}/api/orders?status=new,preparing,ready&limit=50`);
+            // Try new endpoint first
+            let response = await fetch(`${CONFIG.NODEJS_URL}/api/orders?status=new,preparing,ready`);
+            
+            // If that fails, try alternative endpoint
+            if (!response.ok) {
+                console.log('⚠️ Trying alternative endpoint...');
+                response = await fetch(`${CONFIG.NODEJS_URL}/api/restaurants/0fa03a81-6d4c-4d97-9e49-af73ddcbb449/orders`);
+            }
             
             if (!response.ok) {
                 console.error(`❌ HTTP Error: ${response.status}`);
+                const text = await response.text();
+                console.error('Response:', text);
                 return;
             }
             
             const data = await response.json();
+            console.log('📦 Raw response:', data);
+            
+            // Handle different response formats
+            let ordersArray = [];
             
             if (data.success && data.orders) {
-                console.log(`✅ Loaded ${data.orders.length} orders from database`);
-                
-                const fetchedOrders = data.orders.map(dbOrder => {
-                    let items = [];
-                    
-                    if (typeof dbOrder.order_items === 'string') {
-                        try {
-                            items = JSON.parse(dbOrder.order_items);
-                        } catch (e) {
-                            items = [{name: dbOrder.order_items, quantity: 1, completed: false}];
-                        }
-                    } else {
-                        items = dbOrder.order_items || [];
-                    }
-                    
-                    items = items.map(item => ({
-                        name: item.name || 'Unknown',
-                        quantity: item.quantity || 1,
-                        completed: item.completed || false
-                    }));
-                    
-                    return {
-                        id: dbOrder.id,
-                        number: parseInt((dbOrder.order_number || '0').replace(/\D/g, '')) || Date.now(),
-                        source: dbOrder.order_source || 'phone',
-                        customer: dbOrder.customer_name || 'Unknown',
-                        phone: dbOrder.phone_number || '',
-                        items: items,
-                        status: dbOrder.status || 'new',
-                        startTime: new Date(dbOrder.created_at).getTime(),
-                        promiseTime: dbOrder.promise_time || 20,
-                        locked: dbOrder.locked || false,
-                        timer: Math.floor((Date.now() - new Date(dbOrder.created_at).getTime()) / 1000),
-                        orderNumber: dbOrder.order_number
-                    };
-                });
-                
-                orders = fetchedOrders;
-                
-                console.log(`🎨 Rendering ${orders.length} orders`);
-                renderOrders();
-                updateLoadIndicator();
-                
-            } else {
-                console.log('⚠️ No orders returned from database');
+                ordersArray = data.orders;
+            } else if (Array.isArray(data)) {
+                ordersArray = data;
+            } else if (data.data) {
+                ordersArray = data.data;
             }
             
-        } catch (error) {
-            console.error('❌ Failed to fetch orders:', error.message);
-        }
-    }
-
-    // ============================================
-    // SETTINGS FUNCTIONS
-    // ============================================
-
-    function showSettings() {
-        loadSettingsUI();
-        document.getElementById('settingsModal').classList.add('active');
-    }
-
-    function closeSettings() {
-        saveSettings();
-        document.getElementById('settingsModal').classList.remove('active');
-    }
-
-    function toggleSetting(key) {
-        settings[key] = !settings[key];
-        const toggle = document.getElementById(`toggle-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`);
-        if (toggle) {
-            toggle.classList.toggle('active', settings[key]);
-        }
-        saveSettings();
-    }
-
-    function loadSettingsUI() {
-        Object.keys(settings).forEach(key => {
-            const toggle = document.getElementById(`toggle-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`);
-            if (toggle && typeof settings[key] === 'boolean') {
-                toggle.classList.toggle('active', settings[key]);
+            console.log(`✅ Found ${ordersArray.length} orders`);
+            
+            if (ordersArray.length === 0) {
+                console.log('ℹ️ No orders in database');
+                return;
             }
-        });
-        
-        document.getElementById('remote-promise-time').value = settings.remotePromiseTime;
-        document.getElementById('walkin-expect-time').value = settings.walkinExpectTime;
-        document.getElementById('gap-threshold').value = settings.gapThreshold;
-        document.getElementById('lock-threshold').value = settings.lockThreshold;
-        document.getElementById('load-trigger').value = settings.loadTrigger;
-        document.getElementById('delay-padding').value = settings.delayPadding;
-        document.getElementById('weekend-padding').value = settings.weekendPadding;
-        document.getElementById('card-width').value = settings.cardWidth;
-    }
-
-    function saveSettings() {
-        settings.remotePromiseTime = parseInt(document.getElementById('remote-promise-time').value);
-        settings.walkinExpectTime = parseInt(document.getElementById('walkin-expect-time').value);
-        settings.gapThreshold = parseInt(document.getElementById('gap-threshold').value);
-        settings.lockThreshold = parseInt(document.getElementById('lock-threshold').value);
-        settings.loadTrigger = parseInt(document.getElementById('load-trigger').value);
-        settings.delayPadding = parseInt(document.getElementById('delay-padding').value);
-        settings.weekendPadding = parseInt(document.getElementById('weekend-padding').value);
-        settings.cardWidth = parseInt(document.getElementById('card-width').value);
-        
-        localStorage.setItem('kds_settings', JSON.stringify(settings));
-        console.log('✅ Settings saved');
-    }
-
-    function loadSettings() {
-        const saved = localStorage.getItem('kds_settings');
-        if (saved) {
-            settings = { ...settings, ...JSON.parse(saved) };
-        }
-    }
-
-    function updateCardWidth() {
-        settings.cardWidth = parseInt(document.getElementById('card-width').value);
-        
-        const style = document.createElement('style');
-        style.id = 'dynamic-card-width';
-        const existingStyle = document.getElementById('dynamic-card-width');
-        if (existingStyle) existingStyle.remove();
-        
-        style.innerHTML = `
-            .order-card {
-                min-width: ${settings.cardWidth}px !important;
-                max-width: ${settings.cardWidth}px !important;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    function resetToDefaults() {
-        if (confirm('Reset all settings to defaults?')) {
-            localStorage.removeItem('kds_settings');
-            location.reload();
-        }
-    }
-
-    function clearAllOrders() {
-        if (confirm('Clear all orders? This will NOT delete from database.')) {
-            orders = [];
+            
+            const fetchedOrders = ordersArray.map(dbOrder => {
+                // Parse items
+                let items = [];
+                
+                if (typeof dbOrder.order_items === 'string') {
+                    try {
+                        const parsed = JSON.parse(dbOrder.order_items);
+                        items = Array.isArray(parsed) ? parsed : [parsed];
+                    } catch (e) {
+                        console.error('Failed to parse order_items:', dbOrder.order_items);
+                        items = [{name: 'Unknown', quantity: 1, completed: false}];
+                    }
+                } else if (Array.isArray(dbOrder.order_items)) {
+                    items = dbOrder.order_items;
+                } else if (dbOrder.items) {
+                    items = Array.isArray(dbOrder.items) ? dbOrder.items : [dbOrder.items];
+                }
+                
+                // Ensure items have correct structure
+                items = items.map(item => ({
+                    name: item.name || 'Unknown',
+                    quantity: item.quantity || 1,
+                    completed: item.completed || false
+                }));
+                
+                // Determine source
+                let source = 'phone';
+                if (dbOrder.order_source) {
+                    const src = dbOrder.order_source.toLowerCase();
+                    if (src.includes('whats')) source = 'whatsapp';
+                    else if (src.includes('walk')) source = 'walkin';
+                } else if (dbOrder.order_type) {
+                    const type = dbOrder.order_type.toLowerCase();
+                    if (type.includes('delivery')) source = 'whatsapp';
+                    else if (type.includes('walk')) source = 'walkin';
+                }
+                
+                const createdTime = new Date(dbOrder.created_at).getTime();
+                const elapsed = Math.floor((Date.now() - createdTime) / 1000);
+                
+                return {
+                    id: dbOrder.id,
+                    number: orderCounter++,
+                    source: source,
+                    customer: dbOrder.customer_name || 'Guest',
+                    phone: dbOrder.phone_number || '',
+                    items: items,
+                    status: dbOrder.status || 'new',
+                    startTime: createdTime,
+                    promiseTime: source === 'walkin' ? settings.walkinExpectTime : settings.remotePromiseTime,
+                    locked: false,
+                    timer: elapsed,
+                    orderNumber: dbOrder.order_number || `UD${dbOrder.id}`
+                };
+            });
+            
+            console.log('✅ Parsed orders:', fetchedOrders.length);
+            orders = fetchedOrders;
+            
             renderOrders();
             updateLoadIndicator();
+            
+        } catch (error) {
+            console.error('❌ Failed to fetch orders:', error);
+            console.error('Stack:', error.stack);
         }
-    }
-
-    function refreshOrders() {
-        console.log('🔄 Manual refresh');
-        fetchOrdersFromSupabase();
-    }
-
-    function showSearch() {
-        alert('Search functionality - Coming soon!');
-    }
-
-    function showHistory() {
-        alert('Order history - Coming soon!');
-    }
-
-    function exportGapReport() {
-        alert('Gap Report export - Coming soon!');
-    }
-
-    function addTestOrder() {
-        createTestOrder();
-    }
-
-    function resetSettings() {
-        resetToDefaults();
     }
 
     // ============================================
@@ -1885,50 +1902,97 @@
         **/
         // Listen for legacy format
     socket.on('new-kds-order', (data) => {
-        console.log('📥 LEGACY ORDER:', data);
+    console.log('📥 NEW ORDER RECEIVED:', data);
+    console.log('📦 Order details:', JSON.stringify(data, null, 2));
+    
+    try {
+        // Extract items array
+        let itemsArray = [];
         
-        try {
-            const formattedItems = (data.orderItems || []).map(item => ({
-                name: item.name || item,
+        if (data.items && Array.isArray(data.items)) {
+            itemsArray = data.items.map(item => ({
+                name: item.name || 'Unknown Item',
                 quantity: item.quantity || 1,
                 completed: false
             }));
-
-            const promiseTime = data.orderType === 'Walk-In' 
-                ? settings.walkinExpectTime 
-                : settings.remotePromiseTime;
-
-            const newOrder = {
-                id: data.id,
-                number: data.orderNumber ? parseInt(data.orderNumber.replace(/\D/g, '')) : orderCounter++,
-                source: data.orderType ? data.orderType.toLowerCase().replace(' ', '') : 'phone',
-                customer: data.customerName || 'Guest',
-                phone: data.phoneNumber || '',
-                items: formattedItems,
-                status: 'new',
-                startTime: Date.now(),
-                promiseTime: promiseTime,
-                locked: false,
-                timer: 0,
-                orderNumber: data.orderNumber
-            };
-
-                
-
-            const existingIndex = orders.findIndex(o => o.orderNumber === newOrder.orderNumber);
-            if (existingIndex === -1) {
-                orders.push(newOrder);
-                playSound('new');
-                renderOrders();
-                updateLoadIndicator();
-                console.log('✅ Legacy order added!');
-                console.log('🆔 Order ID extracted from newOrder.id:', newOrder.id);
+        } else if (data.orderItems && Array.isArray(data.orderItems)) {
+            itemsArray = data.orderItems.map(item => ({
+                name: typeof item === 'string' ? item : item.name,
+                quantity: item.quantity || 1,
+                completed: false
+            }));
+        } else if (typeof data.items === 'string') {
+            try {
+                const parsed = JSON.parse(data.items);
+                itemsArray = parsed.map(item => ({
+                    name: item.name,
+                    quantity: item.quantity || 1,
+                    completed: false
+                }));
+            } catch (e) {
+                console.error('Failed to parse items:', e);
             }
-            
-        } catch (error) {
-            console.error('❌ Legacy order error:', error);
         }
-    });  // ← Close new-kds-order handler HERE
+        
+        console.log('🍽️ Parsed items:', itemsArray);
+        
+        // Determine source type
+        let orderSource = 'phone';
+        if (data.orderType) {
+            const type = data.orderType.toLowerCase();
+            if (type.includes('delivery')) orderSource = 'whatsapp';
+            else if (type.includes('takeout') || type.includes('pickup')) orderSource = 'phone';
+            else if (type.includes('walk')) orderSource = 'walkin';
+        }
+        
+        // Determine promise time
+        const promiseTime = orderSource === 'walkin' 
+            ? settings.walkinExpectTime 
+            : settings.remotePromiseTime;
+        
+        const newOrder = {
+            id: data.id || Date.now(),
+            number: orderCounter++,
+            source: orderSource,
+            customer: data.customerName || data.customer_name || 'Guest',
+            phone: data.phone || data.phone_number || '',
+            items: itemsArray,
+            status: 'new',
+            startTime: Date.now(),
+            promiseTime: promiseTime,
+            locked: false,
+            timer: 0,
+            orderNumber: data.orderNumber || data.order_number || `UD${Date.now()}`
+        };
+        
+        console.log('✅ Created order object:', newOrder);
+        
+        // Check if already exists
+        const existingIndex = orders.findIndex(o => 
+            o.orderNumber === newOrder.orderNumber || o.id === newOrder.id
+        );
+        
+        if (existingIndex === -1) {
+            console.log('➕ Adding new order to array');
+            orders.push(newOrder);
+            
+            // Play sound with user interaction fallback
+            playNewOrderSound();
+            
+            renderOrders();
+            updateLoadIndicator();
+            
+            console.log('✅ Order added! Total orders:', orders.length);
+            console.log('📋 Order list:', orders.map(o => o.orderNumber));
+        } else {
+            console.log('⚠️ Order already exists:', newOrder.orderNumber);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error processing order:', error);
+        console.error('Stack:', error.stack);
+    }
+});
     
     
     // Listen for order status updates from other KDS displays
