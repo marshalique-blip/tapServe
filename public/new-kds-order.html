@@ -2220,6 +2220,13 @@ function playNewOrderSound() {
 
     console.log('🍜 Tap+Serve KDS Initialized');
 
+     if (settings.nodejs) {
+        setTimeout(() => {
+            console.log('⏰ Initial fetch after 2 seconds...');
+            fetchOrdersFromSupabase();
+        }, 2000);
+    }
+
     document.addEventListener('orderDataUpdated', (event) => {
     const orderId = event.detail.id;
     const buttons = document.querySelectorAll(`.action-btn.btn-start[data-order-id="${orderId}"], 
