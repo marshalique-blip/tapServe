@@ -1011,12 +1011,36 @@
     const chatNumber = '12462367556';
     const API_BASE = window.location.origin;
     
+   
     // ============================================
     // STATE
     // ============================================
     let menuData = [];
-    let cart = new Map(); // itemId -> { item, quantity }
+    let cart = new Map();
     let currentCategory = null;
+    
+    // WhatsApp redirect state
+    let countdownInterval = null;
+    let userWhatsappNumber = '';
+    let currentOrderNumber = '';
+    
+    // ============================================
+    // EXTRACT WHATSAPP NUMBER FROM URL (RUNS IMMEDIATELY)
+    // ============================================
+    function getPhoneFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const phone = urlParams.get('phone');
+        
+        if (phone) {
+            console.log('📱 Phone extracted from URL:', phone);
+            return phone;
+        }
+        
+        return null;
+    }
+    
+    // Extract phone immediately
+    const phoneFromURL = getPhoneFromURL();
     
     // ============================================
     // LOAD RESTAURANT INFO
@@ -1078,17 +1102,13 @@
     // SCROLL TO CATEGORY
     // ============================================
     function scrollToCategory(categoryId, chip) {
-      // Update active chip
       document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
-      
-      // Scroll chip into view
       chip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       
-      // Scroll to section
       const section = document.getElementById(`category-${categoryId}`);
       if (section) {
-        const offset = 200; // Account for sticky header + categories
+        const offset = 200;
         const elementPosition = section.getBoundingClientRect().top;
         const offsetPosition = elementPosition + window.pageYOffset - offset;
         
@@ -1145,7 +1165,6 @@
         div.classList.add('in-cart');
       }
       
-      // Randomly add badges for demo
       const badge = Math.random() > 0.7 ? 
         '<div class="item-badge popular">Popular</div>' : 
         (Math.random() > 0.8 ? '<div class="item-badge">New</div>' : '');
@@ -1412,10 +1431,15 @@
           document.getElementById('modalOrderNumber').textContent = data.order.order_number;
           document.getElementById('successModal').classList.add('show');
           
+          // ✅ START WHATSAPP COUNTDOWN TO RESTAURANT
+          console.log('🚀 Starting WhatsApp redirect to restaurant');
+          console.log('📋 Order number:', data.order.order_number);
+          startWhatsAppCountdown(data.order.order_number);
+          
           // Clear cart
           cart.clear();
           updateCartBadge();
-          renderMenu(); // Re-render to remove "in-cart" states
+          renderMenu();
           
           // Reset form
           document.getElementById('customerForm').reset();
@@ -1431,22 +1455,17 @@
       }
     }
     
-  // ============================================
-  // WHATSAPP REDIRECT WITH COUNTDOWN
-  // ============================================
-
-  let countdownInterval = null;
-  let userWhatsappNumber = '';
-  let currentOrderNumber = '';
-
-  function startWhatsAppCountdown(phoneNumber, orderNumber) {
-      userWhatsappNumber = phoneNumber;
+    // ============================================
+    // WHATSAPP REDIRECT WITH COUNTDOWN
+    // ============================================
+    function startWhatsAppCountdown(orderNumber) {
       currentOrderNumber = orderNumber;
       
       let seconds = 5;
       const countdownEl = document.getElementById('countdownNumber');
       
-      // Update countdown every second
+      console.log('⏱️ Starting countdown: 5 seconds');
+      
       countdownInterval = setInterval(() => {
           seconds--;
           
@@ -1454,38 +1473,41 @@
               countdownEl.textContent = seconds;
           }
           
+          console.log(`⏱️ Countdown: ${seconds}`);
+          
           if (seconds <= 0) {
               clearInterval(countdownInterval);
               openWhatsApp();
           }
       }, 1000);
-  }
+    }
 
-  function openWhatsApp() {
-    if (countdownInterval) {
-        clearInterval(countdownInterval);
+    function openWhatsApp() {
+      if (countdownInterval) {
+          clearInterval(countdownInterval);
+      }
+      
+      // Format restaurant's WhatsApp number (remove non-digits)
+      const cleanPhone = RESTAURANT_WHATSAPP.replace(/\D/g, '');
+      
+      // WhatsApp deep link to restaurant chat (NO message)
+      const whatsappURL = `https://wa.me/${cleanPhone}`;
+      
+      console.log('📱 Opening restaurant WhatsApp:', whatsappURL);
+      console.log('📞 Restaurant number:', cleanPhone);
+      
+      // Open WhatsApp
+      window.location.href = whatsappURL;
+      
+      // Fallback: Update button text
+      setTimeout(() => {
+          const whatsappBtn = document.getElementById('whatsappBtn');
+          if (whatsappBtn) {
+              whatsappBtn.textContent = '💬 Open WhatsApp';
+          }
+      }, 2000);
     }
     
-    // Format phone number (remove non-digits)
-    const cleanPhone = userWhatsappNumber.replace(/\D/g, '');
-    
-    // WhatsApp deep link WITHOUT message
-    const whatsappURL = `https://wa.me/${chatNumber}`;
-    
-    console.log('📱 Opening WhatsApp:', whatsappURL);
-    
-    // Open WhatsApp
-    window.location.href = whatsappURL;
-    
-    // Fallback: Update button text
-    setTimeout(() => {
-        const whatsappBtn = document.getElementById('whatsappBtn');
-        if (whatsappBtn) {
-            whatsappBtn.textContent = '💬 Open WhatsApp';
-        }
-    }, 2000);
-}
-
     // ============================================
     // SEARCH
     // ============================================
@@ -1503,48 +1525,11 @@
         }
       });
       
-      // Hide empty sections
       document.querySelectorAll('.menu-section').forEach(section => {
         const visibleItems = section.querySelectorAll('.menu-item:not([style*="display: none"])');
         section.style.display = visibleItems.length > 0 ? '' : 'none';
       });
     });
-
-    // ============================================
-// EXTRACT WHATSAPP NUMBER FROM URL
-// ============================================
-function getPhoneFromURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const phone = urlParams.get('phone');
-    
-    if (phone) {
-        console.log('📱 Phone extracted from URL:', phone);
-        return phone;
-    }
-    
-    return null;
-}
-
-// Auto-fill phone field on page load
-document.addEventListener('DOMContentLoaded', () => {
-    const phoneFromURL = getPhoneFromURL();
-    
-    if (phoneFromURL) {
-        // Store in hidden field
-        const hiddenField = document.getElementById('userWhatsapp');
-        if (hiddenField) {
-            hiddenField.value = phoneFromURL;
-            console.log('✅ Phone stored:', phoneFromURL);
-        }
-        
-        // Also populate visible phone input
-        const phoneInput = document.getElementById('customerPhone');
-        if (phoneInput) {
-            phoneInput.value = phoneFromURL;
-            console.log('✅ Phone field pre-filled');
-        }
-    }
-});
     
     // ============================================
     // EVENT LISTENERS
@@ -1556,13 +1541,33 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('placeOrderBtn').addEventListener('click', placeOrder);
     
     // ============================================
-    // INITIALIZE
+    // INITIALIZE - SINGLE DOMContentLoaded
     // ============================================
     document.addEventListener('DOMContentLoaded', () => {
+      console.log('🚀 Page loaded - Initializing...');
+      
+      // 1. Auto-fill phone from URL
+      if (phoneFromURL) {
+        const hiddenField = document.getElementById('userWhatsapp');
+        const phoneInput = document.getElementById('customerPhone');
+        
+        if (hiddenField) {
+          hiddenField.value = phoneFromURL;
+          console.log('✅ Phone stored in hidden field:', phoneFromURL);
+        }
+        
+        if (phoneInput) {
+          phoneInput.value = phoneFromURL;
+          console.log('✅ Phone field pre-filled:', phoneFromURL);
+        }
+      } else {
+        console.log('ℹ️ No phone parameter in URL');
+      }
+      
+      // 2. Load restaurant and menu
       loadRestaurantInfo();
       loadMenu();
+      
+      console.log('✅ Initialization complete');
     });
   </script>
-
-</body>
-</html>
