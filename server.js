@@ -202,7 +202,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         
         // Generate order number
         const orderNumber = "UD" + Math.floor(1000 + Math.random() * 9000);
-        //const orderId = uuidv4();
+        const orderId = uuidv4();
         
         // Save order to database
         const { data: savedOrder, error: dbError } = await supabase
