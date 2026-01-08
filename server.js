@@ -290,7 +290,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 id: orderId,
                 restaurant_id: restaurantId,
                 order_number: orderNumber,
-                userwhatsappNumber: userwhatsappNumber,
+                user_whatsapp_number: userwhatsappNumber,
                 customer_name: customer_name,
                 phone_number: phone_number,
                 user_input_number: user_input_number,
