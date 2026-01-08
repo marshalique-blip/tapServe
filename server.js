@@ -462,33 +462,6 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
     }
 });
 
-// ============================================
-// 5. GET ORDER DETAILS
-// ============================================
-app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
-    try {
-        const { restaurantId, orderId } = req.params;
-        
-        const { data, error } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('id', orderId)
-            .eq('restaurant_id', restaurantId)
-            .single();
-        
-        if (error || !data) {
-            return res.status(404).json({ error: 'Order not found' });
-        }
-        
-        res.json({ success: true, order: data });
-        
-    } catch (err) {
-        console.error('Get order error:', err);
-        res.status(500).json({ error: 'Failed to get order' });
-    }
-});
-
-
 
 // ============================================
 // GET ALL ORDERS FOR A SPECIFIC RESTAURANT (for KDS)
@@ -537,6 +510,33 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
     }
 });
 
+
+
+// ============================================
+// 5. GET ORDER DETAILS
+// ============================================
+app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
+    try {
+        const { restaurantId, orderId } = req.params;
+        
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .eq('restaurant_id', restaurantId)
+            .single();
+        
+        if (error || !data) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        
+        res.json({ success: true, order: data });
+        
+    } catch (err) {
+        console.error('Get order error:', err);
+        res.status(500).json({ error: 'Failed to get order' });
+    }
+});
 
 
 // ============================================
