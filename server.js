@@ -488,6 +488,57 @@ app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
     }
 });
 
+
+
+// ============================================
+// GET ALL ORDERS FOR A SPECIFIC RESTAURANT (for KDS)
+// ============================================
+app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { status } = req.query;
+        
+        console.log(`📋 Fetching orders for restaurant: ${restaurantId}`);
+        
+        let query = supabase
+            .from('orders')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .order('created_at', { ascending: false });
+        
+        // Filter by status if provided (?status=new,preparing,ready)
+        if (status) {
+            const statusArray = status.split(',').map(s => s.trim());
+            query = query.in('status', statusArray);
+            console.log(`📋 Filtering by status: ${statusArray.join(', ')}`);
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) {
+            console.error('❌ Fetch orders error:', error);
+            throw error;
+        }
+        
+        console.log(`✅ Found ${data.length} orders for restaurant ${restaurantId}`);
+        
+        res.json({ 
+            success: true, 
+            orders: data,
+            count: data.length 
+        });
+        
+    } catch (err) {
+        console.error('Get restaurant orders error:', err);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to get orders' 
+        });
+    }
+});
+
+
+
 // ============================================
 // 6. GET ALL ORDERS (for KDS)
 // ============================================
