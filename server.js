@@ -305,6 +305,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         if (dbError) throw dbError;
         
         console.log(`✅ Order created: ${orderNumber} - $${total.toFixed(2)}`);
+        console.log('✅ user_input_number confirmed:', user_input_number);
         
         // Send WhatsApp confirmation
         if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
