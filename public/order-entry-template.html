@@ -937,52 +937,182 @@
     </div>
     
     <script>
-        const RESTAURANT_ID = '0fa03a81-6d4c-4d97-9e49-af73ddcbb449';
-        const API_BASE = window.location.origin;
+
+// IMPORTANT: Replace this with your actual Restaurant ID from Supabase
+const RESTAURANT_ID = '0fa03a81-6d4c-4d97-9e49-af73ddcbb449'; 
+const API_BASE = window.location.origin;
+
+let menuData = [];
+let currentOrder = [];
+let selectedOrderType = 'walk-in';
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (!RESTAURANT_ID) {
+        console.error("Missing RESTAURANT_ID. Please set it in the script.");
+    }
+    loadMenu();
+    setupEventListeners();
+});
+
+// --- CORE FUNCTIONS ---
+
+async function loadMenu() {
+    const menuContainer = document.getElementById('menuContainer');
+    menuContainer.innerHTML = '<div class="empty-cart">Loading menu...</div>';
+
+    try {
+        const response = await fetch(`${API_BASE}/api/restaurants/${RESTAURANT_ID}/menu?available_only=false`);
+        const data = await response.json();
         
-        let menuData = [];
-        let currentOrder = [];
-        let selectedOrderType = 'walk-in';
+        if (data.success) {
+            menuData = data.menu;
+            renderMenu(menuData); // Pass data to render
+            renderCategoryFilters();
+        }
+    } catch (error) {
+        console.error('Failed to load menu:', error);
+        menuContainer.innerHTML = '<div class="empty-cart" style="color: var(--danger)">Failed to load menu. Check console for CORS or ID errors.</div>';
+    }
+}
+
+function renderMenu(categories) {
+    const container = document.getElementById('menuContainer');
+    container.innerHTML = ''; // Clear loader
+
+    categories.forEach(category => {
+        // Create Category Section
+        const section = document.createElement('div');
+        section.className = 'menu-category';
+        section.id = `cat-section-${category.id}`;
         
-        document.addEventListener('DOMContentLoaded', () => {
-            loadMenu();
-            setupEventListeners();
-        });
+        section.innerHTML = `
+            <div class="category-header">
+                <span class="category-icon">${category.icon || '🍽️'}</span>
+                <h3 class="category-title">${category.name}</h3>
+            </div>
+            <div class="menu-grid" id="grid-${category.id}"></div>
+        `;
         
-        async function loadMenu() {
-            try {
-                const response = await fetch(`${API_BASE}/api/restaurants/${RESTAURANT_ID}/menu?available_only=false`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    menuData = data.menu;
-                    renderMenu();
-                    renderCategoryFilters();
-                }
-            } catch (error) {
-                console.error('Failed to load menu:', error);
-                alert('Failed to load menu. Please refresh the page.');
+        container.appendChild(section);
+        const grid = document.getElementById(`grid-${category.id}`);
+
+        // Create Item Cards
+        category.items.forEach(item => {
+            const itemCard = document.createElement('div');
+            itemCard.className = `menu-item ${!item.is_available ? 'unavailable' : ''}`;
+            
+            // Accessibility: Make it keyboard accessible if available
+            if (item.is_available) {
+                itemCard.tabIndex = 0;
+                itemCard.setAttribute('role', 'button');
+                itemCard.setAttribute('aria-label', `Add ${item.name} for $${item.price} to order`);
+                itemCard.onclick = () => addToOrder(item);
+                itemCard.onkeypress = (e) => { if(e.key === 'Enter') addToOrder(item); };
             }
-        }
-        
-        function renderCategoryFilters() {
-            const container = document.getElementById('categoryFilters');
-            container.innerHTML = '<div class="category-chip active" data-category="all">All</div>';
-            
-            menuData.forEach(category => {
-                const chip = document.createElement('div');
-                chip.className = 'category-chip';
-                chip.dataset.category = category.id;
-                chip.textContent = category.name;
-                chip.onclick = () => filterByCategory(category.id, chip);
-                container.appendChild(chip);
-            });
-        }
-        
-        function filterByCategory(categoryId, chipElement) {
+
+            itemCard.innerHTML = `
+                <img src="${item.image_url || 'https://via.placeholder.com/150'}" alt="${item.name}" class="item-image">
+                <div class="item-info">
+                    <h4 class="item-name">${item.name}</h4>
+                    <p class="item-description">${item.description || ''}</p>
+                    <div class="item-price">$${parseFloat(item.price).toFixed(2)}</div>
+                </div>
+            `;
+            grid.appendChild(itemCard);
+        });
+    });
+}
+
+function renderCategoryFilters() {
+    const container = document.getElementById('categoryFilters');
+    container.innerHTML = '<div class="category-chip active" data-id="all">All</div>';
+    
+    menuData.forEach(category => {
+        const chip = document.createElement('div');
+        chip.className = 'category-chip';
+        chip.textContent = category.name;
+        chip.onclick = () => {
+            // Update active state
             document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
-            chipElement.classList.add('active');
+            chip.classList.add('active');
             
-            if (categoryId === 'all') {
-                document.querySelectorAll('.menu-category').forEach(c => c.style.display = 'block');
-            } else {
+            // Filter categories
+            document.querySelectorAll('.menu-category').forEach(sec => {
+                sec.style.display = (category.id === 'all' || sec.id === `cat-section-${category.id}`) ? 'block' : 'none';
+            });
+        };
+        container.appendChild(chip);
+    });
+
+    // Handle "All" click
+    container.firstChild.onclick = () => {
+        document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+        container.firstChild.classList.add('active');
+        document.querySelectorAll('.menu-category').forEach(sec => sec.style.display = 'block');
+    };
+}
+
+// --- ORDER LOGIC ---
+
+function addToOrder(item) {
+    const existing = currentOrder.find(i => i.id === item.id);
+    if (existing) {
+        existing.quantity += 1;
+    } else {
+        currentOrder.push({ ...item, quantity: 1 });
+    }
+    renderOrder();
+}
+
+// Function to handle rendering the sidebar items...
+function renderOrder() {
+    const orderItemsContainer = document.getElementById('orderItems');
+    const orderSummary = document.getElementById('orderSummary');
+    const placeOrderBtn = document.getElementById('placeOrderBtn');
+    
+    if (currentOrder.length === 0) {
+        orderItemsContainer.innerHTML = '<div class="empty-cart"><div class="empty-cart-icon">🛒</div><p>No items added yet</p></div>';
+        orderSummary.style.display = 'none';
+        placeOrderBtn.disabled = true;
+        return;
+    }
+
+    orderSummary.style.display = 'block';
+    placeOrderBtn.disabled = false;
+    orderItemsContainer.innerHTML = '';
+
+    let subtotal = 0;
+    currentOrder.forEach(item => {
+        subtotal += item.price * item.quantity;
+        const div = document.createElement('div');
+        div.className = 'order-item';
+        div.innerHTML = `
+            <div class="order-item-info">
+                <div class="order-item-name">${item.name}</div>
+                <div class="order-item-price">$${(item.price * item.quantity).toFixed(2)}</div>
+            </div>
+            <div class="qty-control">
+                <button class="qty-btn" onclick="updateQty('${item.id}', -1)">-</button>
+                <span class="qty-value">${item.quantity}</span>
+                <button class="qty-btn" onclick="updateQty('${item.id}', 1)">+</button>
+            </div>
+        `;
+        orderItemsContainer.appendChild(div);
+    });
+
+    const tax = subtotal * 0.08;
+    document.getElementById('subtotal').textContent = `$${subtotal.toFixed(2)}`;
+    document.getElementById('tax').textContent = `$${tax.toFixed(2)}`;
+    document.getElementById('total').textContent = `$${(subtotal + tax).toFixed(2)}`;
+}
+
+function updateQty(id, delta) {
+    const item = currentOrder.find(i => i.id === id);
+    if (item) {
+        item.quantity += delta;
+        if (item.quantity <= 0) {
+            currentOrder = currentOrder.filter(i => i.id !== id);
+        }
+    }
+    renderOrder();
+}
