@@ -216,7 +216,7 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
 app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const { customer_name, phone_number,user_input_number, user_whatsapp, order_type, items: orderItems, notes } = req.body;
+        const { customer_name, phone_number,user_input_number, user_whatsapp_number, order_type, items: orderItems, notes } = req.body;
         
         if (!customer_name || !phone_number || !orderItems || orderItems.length === 0) {
             return res.status(400).json({ 
@@ -290,7 +290,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 id: orderId,
                 restaurant_id: restaurantId,
                 order_number: orderNumber,
-                user_whatsapp_number: user_whatsapp,
+                user_whatsapp_number: user_whatsapp_number,
                 customer_name: customer_name,
                 phone_number: phone_number,
                 user_input_number: user_input_number,
@@ -306,7 +306,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         if (dbError) throw dbError;
         
         console.log(`✅ Order created: ${orderNumber} - $${total.toFixed(2)}`);
-        console.log('✅ User whatsapp number confirmed:', user_whatsapp);
+        console.log('✅ User whatsapp number confirmed:', user_whatsapp_number);
         
         // Send WhatsApp confirmation
         if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
@@ -321,10 +321,10 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 `Thank you! We'll send you updates as your order is prepared.\n\n` +
                 `📱 You can contact us if you have any questions.`;
             
-            sendWhatsAppMessage(phoneFromUrl, confirmationMessage)
+            sendWhatsAppMessage(phone_number, confirmationMessage)
                 .then(result => {
                     if (result.success) {
-                        console.log(`✅ WhatsApp confirmation sent to ${userwhatsappNumber}`);
+                        console.log(`✅ WhatsApp confirmation sent to ${phone_number}`);
                     } else {
                         console.error(`❌ WhatsApp failed: ${result.error}`);
                     }
@@ -408,7 +408,7 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
         console.log(`📝 Order ${data.order_number} status: ${currentOrder.status} → ${status}`);
         
         // Send WhatsApp notifications for status changes
-        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.userwhatsappNumber) {
+        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.phone_number) {
             let message = '';
             let shouldSend = false;
             
@@ -435,9 +435,9 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
             }
             
             if (shouldSend) {
-                console.log(`📱 Sending WhatsApp update to ${currentOrder.userwhatsappNumber}`);
+                console.log(`📱 Sending WhatsApp update to ${currentOrder.phone_number}`);
                 
-                sendWhatsAppMessage(currentOrder.userwhatsappNumber, message)
+                sendWhatsAppMessage(currentOrder.phone_number, message)
                     .then(result => {
                         if (result.success) {
                             console.log(`✅ WhatsApp status update sent for ${data.order_number}`);
