@@ -1387,9 +1387,9 @@
       event.preventDefault();
       
       const customerName = document.getElementById('customerName').value.trim();
-      const customerPhone = document.getElementById('userWhatsapp').value.trim();
+      const customerPhone = document.getElementById('phoneInput').trim();
       const userInputNumber = document.getElementById('customerPhone').value.trim();
-      const userWhatsappNumber = document.getElementById('userWhatsapp').value.trim();
+      const userWhatsapp = document.getElementById('phoneInput').trim();
       const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
@@ -1421,7 +1421,7 @@
             customer_name: customerName,
             phone_number: customerPhone,
             user_input_number: userInputNumber,
-            user_whatsapp_number: userWhatsappNumber,
+            user_whatsapp_number: userWhatsapp,
             order_type: orderType,
             items: items,
             notes: `Delivery: ${deliveryAddress} | ${specialNotes || 'No special instructions'}`
@@ -1429,7 +1429,7 @@
         });
         
         console.log(`✅ user_input_number confirmed:`, userInputNumber);
-         console.log(`✅ User whatsapp number confirmed:`, userWhatsappNumber);
+         console.log(`✅ User whatsapp number confirmed:`, userWhatsapp);
 
 
         const data = await response.json();
