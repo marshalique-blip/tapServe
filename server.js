@@ -216,7 +216,7 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
 app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const { customer_name, phone_number,user_input_number, user_whatsapp_number, order_type, items: orderItems, notes } = req.body;
+        const { customer_name, phone_number, order_type, items: orderItems, notes } = req.body;
         
         if (!customer_name || !phone_number || !orderItems || orderItems.length === 0) {
             return res.status(400).json({ 
@@ -290,10 +290,8 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 id: orderId,
                 restaurant_id: restaurantId,
                 order_number: orderNumber,
-                user_whatsapp_number: user_whatsapp_number,
                 customer_name: customer_name,
                 phone_number: phone_number,
-                user_input_number: user_input_number,
                 order_source: order_type?.toLowerCase() || 'walk-in',
                 order_items: JSON.stringify(calculatedItems),
                 total_amount: total.toFixed(2),
@@ -306,7 +304,6 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         if (dbError) throw dbError;
         
         console.log(`✅ Order created: ${orderNumber} - $${total.toFixed(2)}`);
-        console.log('✅ User whatsapp number confirmed:', user_whatsapp_number);
         
         // Send WhatsApp confirmation
         if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
