@@ -895,11 +895,6 @@
         <form class="customer-form" id="customerForm">
           <div class="form-group">
             <input type="hidden" id="userWhatsapp" value="">
-<<<<<<< HEAD
-            <input type="hidden" id="userInputNumber" value="">
-=======
-            <input type='hidden' id="userInputNumber" value="">
->>>>>>> parent of 6e6db0e (Update premium-orders.html)
             <label class="form-label">Full Name *</label>
             <input 
               type="text" 
@@ -1016,7 +1011,6 @@
     const RESTAURANT_ID = '0fa03a81-6d4c-4d97-9e49-af73ddcbb449'; // Ultra Dine demo
     const RESTAURANT_WHATSAPP = '12462367556';
     const API_BASE = window.location.origin;
-    console.log=('RESTAURANT_WHATSAPP defined:', RESTAURANT_WHATSAPP);
     
 
     
@@ -1392,14 +1386,7 @@
       event.preventDefault();
       
       const customerName = document.getElementById('customerName').value.trim();
-<<<<<<< HEAD
-      const customerPhone = document.getElementById('phoneInput').trim();
-      const userInputNumber = document.getElementById('customerPhone').value.trim();
-      const userWhatsapp = document.getElementById('phoneInput').trim();
-=======
-      const customerPhone = document.getElementById('userWhatsapp').value.trim();
-      const userInputNumber = document.getElementById('customerPhone').value.trim();
->>>>>>> parent of 6e6db0e (Update premium-orders.html)
+      const customerPhone = document.getElementById('customerPhone').value.trim();
       const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
@@ -1430,21 +1417,12 @@
           body: JSON.stringify({
             customer_name: customerName,
             phone_number: customerPhone,
-            user_input_number: userInputNumber,
-<<<<<<< HEAD
-            user_whatsapp_number: userWhatsapp,
-=======
->>>>>>> parent of 6e6db0e (Update premium-orders.html)
             order_type: orderType,
             items: items,
             notes: `Delivery: ${deliveryAddress} | ${specialNotes || 'No special instructions'}`
           })
         });
         
-        console.log(`✅ user_input_number confirmed:`, userInputNumber);
-         console.log(`✅ User whatsapp number confirmed:`, userWhatsapp);
-
-
         const data = await response.json();
         
         if (data.success) {
