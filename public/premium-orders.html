@@ -895,7 +895,7 @@
         <form class="customer-form" id="customerForm">
           <div class="form-group">
             <input type="hidden" id="userWhatsapp" value="">
-            <input type="hidden" id="userInputNumber" value="customerPhone">
+            <input type="hidden" id="userInputNumber" value="">
             <label class="form-label">Full Name *</label>
             <input 
               type="text" 
@@ -1388,7 +1388,8 @@
       
       const customerName = document.getElementById('customerName').value.trim();
       const customerPhone = document.getElementById('customerPhone').value.trim();
-      const userInputNumber = document.getElementById('userInputNumber').value.trim();
+      const userInputNumber = document.getElementById('customerPhone').value.trim();
+      const userWhatsappNumber = document.getElementById('userWhatsapp').value.trim();
       const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
       const orderType = document.getElementById('orderType').value;
       const specialNotes = document.getElementById('specialNotes').value.trim();
@@ -1420,13 +1421,16 @@
             customer_name: customerName,
             phone_number: customerPhone,
             user_input_number: userInputNumber,
+            userWhatsappNumber: userWhatsappNumber,
             order_type: orderType,
             items: items,
             notes: `Delivery: ${deliveryAddress} | ${specialNotes || 'No special instructions'}`
           })
         });
         
-        console.log('✅ user_input_number confirmed:', userInputNumber);
+        console.log(`✅ user_input_number confirmed:`, userInputNumber);
+         console.log(`✅ User's whatsapp number confirmed:`, userWhatsappNumber);
+
 
         const data = await response.json();
         
