@@ -1708,10 +1708,10 @@ function playNewOrderSound() {
         }
         
         try {
-            console.log('🔄 Fetching orders from:', `${CONFIG.NODEJS_URL}/api/restaurants/${CONFIG.RESTAURANT_ID}/orders`);
+            console.log('🔄 Fetching orders from:', `${CONFIG.NODEJS_URL}/api/restaurants/${RESTAURANT_ID}/orders`);
             
             // PRIMARY: Try restaurant-specific endpoint
-            let response = await fetch(`${CONFIG.NODEJS_URL}/api/restaurants/${CONFIG.RESTAURANT_ID}/orders`);
+            let response = await fetch(`${CONFIG.NODEJS_URL}/api/restaurants/${RESTAURANT_ID}/orders`);
             
             // FALLBACK 1: Try status-filtered endpoint
             if (!response.ok) {
