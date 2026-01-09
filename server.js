@@ -419,8 +419,9 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
             else if (status === 'ready' && currentOrder.status === 'preparing') {
                 message = `✅ *Order Ready!*\n\n` +
                     `Order #${data.order_number}\n\n` +
-                    `Your order is ready for ${currentOrder.order_type}! 🎉\n\n` +
-                    `${currentOrder.order_type === 'Delivery' ? '🚗 Our driver will be there soon!' : '🥡 Ready for pickup!'}`;
+                    `Your order is ready for pickup! 🎉\n\n`; //<== Added to bypass error 'currentOrder.order_type not defined'
+                    // `Your order is ready for ${currentOrder.order_type}! 🎉\n\n` +
+                    // `${currentOrder.order_type === 'Delivery' ? '🚗 Our driver will be there soon!' : '🥡 Ready for pickup!'}`;
                 shouldSend = true;
             }
             else if (status === 'completed' && currentOrder.status === 'ready') {
