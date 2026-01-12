@@ -5,9 +5,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 
-// ============================================
-// INITIALIZE APP & SERVER
-// ============================================
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -18,9 +15,6 @@ const io = new Server(server, {
 });
 const PORT = process.env.PORT || 3000;
 
-// ============================================
-// INITIALIZE SUPABASE
-// ============================================
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
@@ -33,7 +27,6 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Test connectivity
 (async () => {
     const { data, error } = await supabase.from('restaurants').select('*').limit(1);
     if (error) {
@@ -43,15 +36,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
     }
 })();
 
-// ============================================
-// MIDDLEWARE
-// ============================================
 app.use(express.json());
 app.use(express.static('public'));
 
-// ============================================
-// HEALTH CHECK
-// ============================================
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy', 
@@ -60,9 +47,6 @@ app.get('/health', (req, res) => {
     });
 });
 
-// ============================================
-// WHATSAPP MESSAGE FUNCTION
-// ============================================
 async function sendWhatsAppMessage(recipientPhone, message) {
     try {
         const formattedPhone = recipientPhone.replace(/[^0-9]/g, '');
@@ -93,49 +77,56 @@ async function sendWhatsAppMessage(recipientPhone, message) {
 }
 
 // ============================================
-// STATUS MESSAGE HELPER
+// NEW: GET ITEM CUSTOMIZATIONS
 // ============================================
-function getStatusMessage(status, orderNumber) {
-    const messages = {
-        'new': 
-            `📝 *Order Received* #${orderNumber}\n\n` +
-            `We've received your order!`,
-        'confirmed': 
-            `✅ *Order Confirmed* #${orderNumber}\n\n` +
-            `Your order has been confirmed and sent to the kitchen!\n\n` +
-            `We'll notify you when it's ready.`,
-        'preparing': 
-            `👨‍🍳 *Preparing Your Order* #${orderNumber}\n\n` +
-            `Our chefs are cooking your meal right now!\n\n` +
-            `Estimated time: 15-20 minutes`,
-        'ready': 
-            `🎉 *Order Ready for Pickup!* #${orderNumber}\n\n` +
-            `Your order is ready!\n\n` +
-            `📍 Please collect within 15 minutes\n\n` +
-            `See you soon!`,
-        'out_for_delivery': 
-            `🚗 *Out for Delivery* #${orderNumber}\n\n` +
-            `Your order is on the way!\n\n` +
-            `Estimated arrival: 20-30 minutes`,
-        'completed': 
-            `✅ *Order Completed* #${orderNumber}\n\n` +
-            `Thank you for your order! 🙏\n\n` +
-            `We hope you enjoyed your meal.\n` +
-            `See you again soon!`,
-        'cancelled': 
-            `❌ *Order Cancelled* #${orderNumber}\n\n` +
-            `Your order has been cancelled.\n\n` +
-            `If you have questions, please call us.`
-    };
-    
-    return messages[status] || `Order #${orderNumber} status: ${status}`;
-}
+app.get('/api/menu-items/:itemId/customizations', async (req, res) => {
+    try {
+        const { itemId } = req.params;
+        
+        // Get customization categories
+        const { data: categories, error: catError } = await supabase
+            .from('item_customization_categories')
+            .select('*')
+            .eq('menu_item_id', itemId)
+            .order('display_order');
+        
+        if (catError) throw catError;
+        
+        if (!categories || categories.length === 0) {
+            return res.json({ 
+                success: true, 
+                customizations: [] 
+            });
+        }
+        
+        // Get options for each category
+        const categoryIds = categories.map(c => c.id);
+        const { data: options, error: optError } = await supabase
+            .from('customization_options')
+            .select('*')
+            .in('category_id', categoryIds)
+            .eq('is_available', true)
+            .order('display_order');
+        
+        if (optError) throw optError;
+        
+        // Group options by category
+        const customizations = categories.map(category => ({
+            ...category,
+            options: options.filter(opt => opt.category_id === category.id)
+        }));
+        
+        res.json({ 
+            success: true, 
+            customizations 
+        });
+        
+    } catch (err) {
+        console.error('Get customizations error:', err);
+        res.status(500).json({ error: 'Failed to get customizations' });
+    }
+});
 
-// ============================================
-// MULTI-TENANT RESTAURANT APIS
-// ============================================
-
-// 1. GET RESTAURANT INFO
 app.get('/api/restaurants/:slug', async (req, res) => {
     try {
         const { slug } = req.params;
@@ -159,13 +150,11 @@ app.get('/api/restaurants/:slug', async (req, res) => {
     }
 });
 
-// 2. GET FULL MENU (with categories)
 app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
     try {
         const { restaurantId } = req.params;
         const { available_only } = req.query;
         
-        // Get categories
         const { data: categories, error: catError } = await supabase
             .from('menu_categories')
             .select('*')
@@ -175,7 +164,6 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
         
         if (catError) throw catError;
         
-        // Get menu items
         let itemsQuery = supabase
             .from('menu_items')
             .select('*')
@@ -190,7 +178,6 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
         
         if (itemsError) throw itemsError;
         
-        // Group items by category
         const menu = categories.map(category => ({
             ...category,
             items: items.filter(item => item.category_id === category.id)
@@ -212,7 +199,9 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
     }
 });
 
-// 3. CREATE ORDER WITH SERVER-SIDE CALCULATIONS
+// ============================================
+// UPDATED: CREATE ORDER WITH CUSTOMIZATIONS
+// ============================================
 app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
@@ -224,7 +213,6 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             });
         }
         
-        // Get restaurant settings for tax rate
         const { data: restaurant, error: restError } = await supabase
             .from('restaurants')
             .select('settings, name')
@@ -236,7 +224,6 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         const taxRate = restaurant.settings.tax_rate || 0;
         const restaurantName = restaurant.name || 'Restaurant';
         
-        // Fetch actual prices from database (prevent price manipulation)
         const itemIds = orderItems.map(item => item.id);
         const { data: menuItems, error: itemsError } = await supabase
             .from('menu_items')
@@ -246,7 +233,6 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         
         if (itemsError) throw itemsError;
         
-        // Check if any items are unavailable
         const unavailableItems = menuItems.filter(item => !item.is_available);
         if (unavailableItems.length > 0) {
             return res.status(400).json({ 
@@ -255,35 +241,63 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             });
         }
         
-        // Calculate order total using SERVER prices
+        // Calculate total with customizations
         let subtotal = 0;
-        const calculatedItems = orderItems.map(orderItem => {
+        const calculatedItems = [];
+        
+        for (const orderItem of orderItems) {
             const menuItem = menuItems.find(m => m.id === orderItem.id);
             if (!menuItem) {
                 throw new Error(`Item ${orderItem.id} not found`);
             }
             
             const quantity = parseInt(orderItem.quantity) || 1;
-            const itemTotal = menuItem.price * quantity;
+            let itemPrice = menuItem.price;
+            
+            // Add customization prices
+            let customizationsTotal = 0;
+            const customizationDetails = [];
+            
+            if (orderItem.customizations && orderItem.customizations.length > 0) {
+                const customizationIds = orderItem.customizations.map(c => c.id);
+                
+                const { data: customOptions } = await supabase
+                    .from('customization_options')
+                    .select('id, name, price')
+                    .in('id', customizationIds);
+                
+                if (customOptions) {
+                    customOptions.forEach(opt => {
+                        customizationsTotal += parseFloat(opt.price);
+                        customizationDetails.push({
+                            id: opt.id,
+                            name: opt.name,
+                            price: parseFloat(opt.price)
+                        });
+                    });
+                }
+            }
+            
+            const itemTotal = (itemPrice + customizationsTotal) * quantity;
             subtotal += itemTotal;
             
-            return {
+            calculatedItems.push({
                 id: menuItem.id,
                 name: menuItem.name,
                 price: menuItem.price,
                 quantity: quantity,
+                customizations: customizationDetails,
+                special_notes: orderItem.special_notes || '',
                 item_total: itemTotal
-            };
-        });
+            });
+        }
         
         const tax = subtotal * taxRate;
         const total = subtotal + tax;
         
-        // Generate order number
         const orderNumber = "UD" + Math.floor(1000 + Math.random() * 9000);
         const orderId = uuidv4();
         
-        // Save order to database
         const { data: savedOrder, error: dbError } = await supabase
             .from('orders')
             .insert([{
@@ -307,31 +321,27 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         
         // Send WhatsApp confirmation
         if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
+            const itemsText = calculatedItems.map(item => {
+                let itemStr = `• ${item.name} x${item.quantity}`;
+                if (item.customizations && item.customizations.length > 0) {
+                    const customText = item.customizations.map(c => c.name).join(', ');
+                    itemStr += `\n  + ${customText}`;
+                }
+                itemStr += ` - $${item.item_total.toFixed(2)}`;
+                return itemStr;
+            }).join('\n');
+            
             const confirmationMessage = `✅ *Order Confirmed!*\n\n` +
                 `🏪 ${restaurantName}\n` +
                 `📋 Order #${orderNumber}\n\n` +
                 `*Your Order:*\n` +
-                calculatedItems.map(item => 
-                    `• ${item.name} x${item.quantity} - $${item.item_total.toFixed(2)}`
-                ).join('\n') +
+                itemsText +
                 `\n\n💰 *Total: $${total.toFixed(2)}*\n\n` +
-                `Thank you! We'll send you updates as your order is prepared.\n\n` +
-                `📱 You can contact us if you have any questions.`;
+                `Thank you! We'll send you updates as your order is prepared.`;
             
-            sendWhatsAppMessage(phone_number, confirmationMessage)
-                .then(result => {
-                    if (result.success) {
-                        console.log(`✅ WhatsApp confirmation sent to ${phone_number}`);
-                    } else {
-                        console.error(`❌ WhatsApp failed: ${result.error}`);
-                    }
-                })
-                .catch(err => {
-                    console.error(`❌ WhatsApp error:`, err);
-                });
+            sendWhatsAppMessage(phone_number, confirmationMessage);
         }
         
-        // Broadcast to KDS
         io.emit('new-kds-order', {
             id: orderId,
             orderNumber: orderNumber,
@@ -346,8 +356,6 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             timestamp: new Date().toISOString(),
             notes: notes || ''
         });
-        
-        console.log(`📡 KDS broadcast sent for order ${orderNumber}`);
         
         res.json({
             success: true,
@@ -368,15 +376,11 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     }
 });
 
-// ============================================
-// 4. UPDATE ORDER STATUS (with WhatsApp notifications)
-// ============================================
 app.put('/api/orders/:orderId/status', async (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
     
     try {
-        // Get current order details BEFORE updating
         const { data: currentOrder, error: fetchError } = await supabase
             .from('orders')
             .select('*')
@@ -387,7 +391,6 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
             return res.status(500).json({ success: false, error: fetchError.message });
         }
         
-        // Update in database
         const { data, error } = await supabase
             .from('orders')
             .update({ 
@@ -404,7 +407,6 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
         
         console.log(`📝 Order ${data.order_number} status: ${currentOrder.status} → ${status}`);
         
-        // Send WhatsApp notifications for status changes
         if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.phone_number) {
             let message = '';
             let shouldSend = false;
@@ -412,44 +414,27 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
             if (status === 'preparing' && currentOrder.status === 'new') {
                 message = `👨‍🍳 *Order Update*\n\n` +
                     `Order #${data.order_number}\n\n` +
-                    `Your order is now being prepared! 🔥\n` +
-                    `We'll notify you when it's ready.`;
+                    `Your order is now being prepared! 🔥`;
                 shouldSend = true;
             } 
             else if (status === 'ready' && currentOrder.status === 'preparing') {
                 message = `✅ *Order Ready!*\n\n` +
                     `Order #${data.order_number}\n\n` +
-                    `Your order is ready for pickup! 🎉\n\n`; //<== Added to bypass error 'currentOrder.order_type not defined'
-                    // `Your order is ready for ${currentOrder.order_type}! 🎉\n\n` +
-                    // `${currentOrder.order_type === 'Delivery' ? '🚗 Our driver will be there soon!' : '🥡 Ready for pickup!'}`;
+                    `Your order is ready for pickup! 🎉`;
                 shouldSend = true;
             }
             else if (status === 'completed' && currentOrder.status === 'ready') {
                 message = `🎊 *Order Completed*\n\n` +
                     `Order #${data.order_number}\n\n` +
-                    `Thank you for your order! 😊\n` +
-                    `We hope you enjoy your meal!`;
+                    `Thank you for your order! 😊`;
                 shouldSend = true;
             }
             
             if (shouldSend) {
-                console.log(`📱 Sending WhatsApp update to ${currentOrder.phone_number}`);
-                
-                sendWhatsAppMessage(currentOrder.phone_number, message)
-                    .then(result => {
-                        if (result.success) {
-                            console.log(`✅ WhatsApp status update sent for ${data.order_number}`);
-                        } else {
-                            console.error(`❌ WhatsApp failed for ${data.order_number}:`, result.error);
-                        }
-                    })
-                    .catch(err => {
-                        console.error(`❌ WhatsApp error for ${data.order_number}:`, err);
-                    });
+                sendWhatsAppMessage(currentOrder.phone_number, message);
             }
         }
         
-        // Broadcast to other KDS displays
         io.emit('order_updated', {
             orderId: orderId,
             status: status
@@ -463,16 +448,10 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
     }
 });
 
-
-// ============================================
-// GET ALL ORDERS FOR A SPECIFIC RESTAURANT (for KDS)
-// ============================================
 app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
         const { status } = req.query;
-        
-        console.log(`📋 Fetching orders for restaurant: ${restaurantId}`);
         
         let query = supabase
             .from('orders')
@@ -480,21 +459,14 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
             .eq('restaurant_id', restaurantId)
             .order('created_at', { ascending: false });
         
-        // Filter by status if provided (?status=new,preparing,ready)
         if (status) {
             const statusArray = status.split(',').map(s => s.trim());
             query = query.in('status', statusArray);
-            console.log(`📋 Filtering by status: ${statusArray.join(', ')}`);
         }
         
         const { data, error } = await query;
         
-        if (error) {
-            console.error('❌ Fetch orders error:', error);
-            throw error;
-        }
-        
-        console.log(`✅ Found ${data.length} orders for restaurant ${restaurantId}`);
+        if (error) throw error;
         
         res.json({ 
             success: true, 
@@ -511,11 +483,6 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
     }
 });
 
-
-
-// ============================================
-// 5. GET ORDER DETAILS
-// ============================================
 app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
     try {
         const { restaurantId, orderId } = req.params;
@@ -539,10 +506,6 @@ app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
     }
 });
 
-
-// ============================================
-// 6. GET ALL ORDERS (for KDS)
-// ============================================
 app.get('/api/orders', async (req, res) => {
     try {
         const { status } = req.query;
@@ -569,9 +532,6 @@ app.get('/api/orders', async (req, res) => {
     }
 });
 
-// ============================================
-// 7. GET RESTAURANT STATISTICS
-// ============================================
 app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
     try {
         const { restaurantId } = req.params;
@@ -617,22 +577,14 @@ app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
     }
 });
 
-// ============================================
-// SOCKET.IO CONNECTIONS
-// ============================================
 io.on('connection', (socket) => {
     console.log(`✅ KDS connected: ${socket.id}`);
-    console.log(`📺 Total connections: ${io.engine.clientsCount}`);
     
     socket.on('disconnect', () => {
         console.log(`❌ KDS disconnected: ${socket.id}`);
-        console.log(`📺 Total connections: ${io.engine.clientsCount}`);
     });
 });
 
-// ============================================
-// START SERVER
-// ============================================
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`📡 Socket.IO ready`);
