@@ -5,6 +5,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 
+// ============================================
+// INITIALIZE APP & SERVER
+// ============================================
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -15,6 +18,9 @@ const io = new Server(server, {
 });
 const PORT = process.env.PORT || 3000;
 
+// ============================================
+// INITIALIZE SUPABASE
+// ============================================
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
@@ -27,6 +33,7 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Test connectivity
 (async () => {
     const { data, error } = await supabase.from('restaurants').select('*').limit(1);
     if (error) {
@@ -36,9 +43,15 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
     }
 })();
 
+// ============================================
+// MIDDLEWARE
+// ============================================
 app.use(express.json());
 app.use(express.static('public'));
 
+// ============================================
+// HEALTH CHECK
+// ============================================
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy', 
@@ -47,6 +60,9 @@ app.get('/health', (req, res) => {
     });
 });
 
+// ============================================
+// WHATSAPP MESSAGE FUNCTION
+// ============================================
 async function sendWhatsAppMessage(recipientPhone, message) {
     try {
         const formattedPhone = recipientPhone.replace(/[^0-9]/g, '');
@@ -126,7 +142,11 @@ app.get('/api/menu-items/:itemId/customizations', async (req, res) => {
         res.status(500).json({ error: 'Failed to get customizations' });
     }
 });
+// ============================================
+// MULTI-TENANT RESTAURANT APIS
+// ============================================
 
+// 1. GET RESTAURANT INFO
 app.get('/api/restaurants/:slug', async (req, res) => {
     try {
         const { slug } = req.params;
@@ -150,11 +170,13 @@ app.get('/api/restaurants/:slug', async (req, res) => {
     }
 });
 
+// 2. GET FULL MENU (with categories)
 app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
     try {
         const { restaurantId } = req.params;
         const { available_only } = req.query;
         
+        // Get categories
         const { data: categories, error: catError } = await supabase
             .from('menu_categories')
             .select('*')
@@ -164,6 +186,7 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
         
         if (catError) throw catError;
         
+        // Get menu items
         let itemsQuery = supabase
             .from('menu_items')
             .select('*')
@@ -177,7 +200,8 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
         const { data: items, error: itemsError } = await itemsQuery;
         
         if (itemsError) throw itemsError;
-        
+      
+        // Group items by category
         const menu = categories.map(category => ({
             ...category,
             items: items.filter(item => item.category_id === category.id)
@@ -213,6 +237,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             });
         }
         
+        // Get restaurant settings for tax rate
         const { data: restaurant, error: restError } = await supabase
             .from('restaurants')
             .select('settings, name')
@@ -223,7 +248,8 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         
         const taxRate = restaurant.settings.tax_rate || 0;
         const restaurantName = restaurant.name || 'Restaurant';
-        
+     
+        // Fetch actual prices from database (prevent price manipulation)
         const itemIds = orderItems.map(item => item.id);
         const { data: menuItems, error: itemsError } = await supabase
             .from('menu_items')
@@ -233,6 +259,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         
         if (itemsError) throw itemsError;
         
+        // Check if any items are unavailable
         const unavailableItems = menuItems.filter(item => !item.is_available);
         if (unavailableItems.length > 0) {
             return res.status(400).json({ 
@@ -376,11 +403,15 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     }
 });
 
+// ============================================
+// 4. UPDATE ORDER STATUS (with WhatsApp notifications)
+// ============================================
 app.put('/api/orders/:orderId/status', async (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
     
     try {
+        // Get current order details BEFORE updating
         const { data: currentOrder, error: fetchError } = await supabase
             .from('orders')
             .select('*')
@@ -390,7 +421,7 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
         if (fetchError) {
             return res.status(500).json({ success: false, error: fetchError.message });
         }
-        
+        // Update in database
         const { data, error } = await supabase
             .from('orders')
             .update({ 
@@ -406,7 +437,7 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
         }
         
         console.log(`📝 Order ${data.order_number} status: ${currentOrder.status} → ${status}`);
-        
+        // Send WhatsApp notifications for status changes
         if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.phone_number) {
             let message = '';
             let shouldSend = false;
@@ -431,10 +462,13 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
             }
             
             if (shouldSend) {
+                console.log(`📱 Sending WhatsApp update to ${currentOrder.phone_number}`);
                 sendWhatsAppMessage(currentOrder.phone_number, message);
+                
+
             }
         }
-        
+        // Broadcast to other KDS displays
         io.emit('order_updated', {
             orderId: orderId,
             status: status
@@ -447,7 +481,9 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
         res.status(500).json({ error: err.message || 'Failed to update status' });
     }
 });
-
+// ============================================
+// GET ALL ORDERS FOR A SPECIFIC RESTAURANT (for KDS)
+// ============================================
 app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
@@ -458,7 +494,7 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
             .select('*')
             .eq('restaurant_id', restaurantId)
             .order('created_at', { ascending: false });
-        
+        // Filter by status if provided (?status=new,preparing,ready)
         if (status) {
             const statusArray = status.split(',').map(s => s.trim());
             query = query.in('status', statusArray);
@@ -467,8 +503,12 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
         
         const { data, error } = await query;
         
-        if (error) throw error;
+        if (error) {
+            console.error('❌ Fetch orders error:', error);
+            throw error;
+        }
         
+        console.log(`✅ Found ${data.length} orders for restaurant ${restaurantId}`);        
         res.json({ 
             success: true, 
             orders: data,
@@ -483,7 +523,9 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
         });
     }
 });
-
+// ============================================
+// 5. GET ORDER DETAILS
+// ============================================
 app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
     try {
         const { restaurantId, orderId } = req.params;
@@ -506,7 +548,9 @@ app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
         res.status(500).json({ error: 'Failed to get order' });
     }
 });
-
+// ============================================
+// 6. GET ALL ORDERS (for KDS)
+// ============================================
 app.get('/api/orders', async (req, res) => {
     try {
         const { status } = req.query;
@@ -532,7 +576,9 @@ app.get('/api/orders', async (req, res) => {
         res.status(500).json({ error: 'Failed to get orders' });
     }
 });
-
+// ============================================
+// 7. GET RESTAURANT STATISTICS
+// ============================================
 app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
     try {
         const { restaurantId } = req.params;
@@ -577,15 +623,20 @@ app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
         res.status(500).json({ error: 'Failed to get stats' });
     }
 });
-
+// ============================================
+// SOCKET.IO CONNECTIONS
+// ============================================
 io.on('connection', (socket) => {
     console.log(`✅ KDS connected: ${socket.id}`);
     
     socket.on('disconnect', () => {
         console.log(`❌ KDS disconnected: ${socket.id}`);
+        console.log(`📺 Total connections: ${io.engine.clientsCount}`);
     });
 });
-
+// ============================================
+// START SERVER
+// ============================================
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`📡 Socket.IO ready`);
