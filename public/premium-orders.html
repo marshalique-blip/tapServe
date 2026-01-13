@@ -185,8 +185,8 @@
       padding: 16px 20px; 
     }
     .drawer-item-name { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-    .drawer-item-description { color: var(--text-light); line-height: 1.5; margin-bottom: 10px; }
-    .drawer-item-price { display:flex; justify-content: end; margin-bottom: 20px; font-size: 18px; font-weight: 800; color: var(--primary);}
+    .drawer-item-description { color: var(--text-light); line-height: 1; margin-bottom: 10px; }
+    .drawer-item-price { font-size: 18px; font-weight: 800; color: var(--primary);}
     
     .close-drawer-btn {
       position: absolute;
@@ -398,8 +398,8 @@
       <img id="drawerItemImage" class="drawer-item-image">
       <button class="close-drawer-btn" onclick="closeCustomizationDrawer()">×</button>
       <div class="drawer-item-info">
-        <h2 class="drawer-item-name" id="drawerItemName" float: left; margin-right: 20px;></h2>
-        <h2 class="drawer-item-price" id="drawerItemPrice"></h2>
+        <div class="drawer-name-price" style="display: flex; justify-content: space-between;"><h2 class="drawer-item-name" id="drawerItemName"></h2>
+        <h2 class="drawer-item-price" id="drawerItemPrice"></h2></div>
         <p class="drawer-item-description" id="drawerItemDescription"></p>
         
       </div>
