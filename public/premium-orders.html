@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+   <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -61,6 +61,7 @@
       background: white;
       padding: 16px 0 12px;
       box-shadow: var(--shadow);
+      margin-top: 0;
     }
     
     .categories {
@@ -132,7 +133,7 @@
       right: 0;
       bottom: 0;
       background: rgba(0, 0, 0, 0.6);
-      z-index: 999;
+      z-index: 1000;
       opacity: 0;
       visibility: hidden;
       transition: all 0.3s;
@@ -151,7 +152,7 @@
       right: 0;
       background: white;
       border-radius: 24px 24px 0 0;
-      z-index: 1000;
+      z-index: 1001;
       transform: translateY(100%);
       transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       max-height: 85vh;
@@ -443,7 +444,7 @@
     </div>
   </div>
 
-  <div class="cart-fab" id="cartFab" onclick="alert('Open checkout')">
+  <div class="cart-fab" id="cartFab" onclick="openCheckout()">
     🛒
     <div class="cart-badge" id="cartBadge">0</div>
   </div>
@@ -457,6 +458,14 @@
     let currentItem = null;
     let drawerQty = 1;
     let selectedCustomizations = [];
+
+    function openCheckout() {
+      if (cart.length === 0) {
+        alert('Your cart is empty');
+        return;
+      }
+      alert(`Cart has ${cart.length} items. Checkout functionality coming soon!`);
+    }
 
     async function loadMenu() {
       try {
@@ -486,7 +495,16 @@
     function scrollToCategory(catId) {
       const section = document.getElementById(`category-${catId}`);
       if (section) {
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const headerHeight = 142;
+        const categoriesHeight = 70;
+        const offset = headerHeight + categoriesHeight + 10;
+        const elementPosition = section.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - offset;
+        
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        });
       }
     }
 
@@ -539,14 +557,14 @@
       document.getElementById('drawerItemImage').src = currentItem.image_url;
       document.getElementById('drawerItemName').textContent = currentItem.name;
       document.getElementById('drawerItemDescription').textContent = currentItem.description || '';
-      document.getElementById('drawerItemPrice').textContent = `$${parseFloat(currentItem.price).toFixed(2)}`;
+      document.getElementById('drawerItemPrice').textContent = `${parseFloat(currentItem.price).toFixed(2)}`;
       document.getElementById('drawerQty').textContent = drawerQty;
 
       await loadCustomizations(itemId);
 
+      document.body.style.overflow = 'hidden';
       document.getElementById('customDrawerOverlay').classList.add('active');
       document.getElementById('customDrawer').classList.add('active');
-      document.body.style.overflow = 'hidden';
 
       updateDrawerTotal();
     }
