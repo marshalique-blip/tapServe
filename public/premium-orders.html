@@ -100,7 +100,7 @@
     /* ============================================ */
     .categories-wrapper {
       position: sticky;
-      top: 142px;
+      top: 122px;
       z-index: 99;
       background: white;
       padding: 16px 0 12px;
@@ -204,7 +204,7 @@
       z-index: 1001;
       transform: translateY(100%);
       transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      max-height: 85vh;
+      max-height: 100vh;
       display: flex;
       flex-direction: column;
     }
@@ -220,7 +220,7 @@
     }
     
     .drawer-header {
-      padding: 0 20px 16px;
+      padding: 0 20px 5px;
       border-bottom: 1px solid var(--gray);
       flex-shrink: 0;
     }
@@ -232,9 +232,9 @@
     }
     
     .drawer-item-info { padding: 16px 20px; }
-    .drawer-item-name { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
-    .drawer-item-description { color: var(--text-light); line-height: 1.5; margin-bottom: 12px; }
-    .drawer-item-price { font-size: 15px; font-weight: 800; color: var(--primary); }
+    .drawer-item-name { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .drawer-item-description { font-size: 10; var(--text-light); line-height: 1.5; margin-bottom: 12px; }
+    .drawer-item-price { font-size: 16px; font-weight: 800; color: var(--primary); }
     
     .close-drawer-btn {
       position: absolute;
@@ -1094,7 +1094,7 @@
     // ============================================
     async function loadMenu() {
       try {
-        document.getElementById('restaurantName').textContent = '🍔 Ultra Dine';
+        document.getElementById('restaurantName').textContent = 'Soul Bites Demo';
         
         const res = await fetch(`${API_BASE}/api/restaurants/${RESTAURANT_ID}/menu?available_only=true`);
         const data = await res.json();
