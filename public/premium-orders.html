@@ -8,8 +8,8 @@
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     
     :root {
-      --primary: #395a01;
-      --primary-dark: #395a01c0;
+      --primary: #FF6B35;
+      --primary-dark: #E85A2A;
       --secondary: #4ECDC4;
       --dark: #1A1A2E;
       --gray: #E8E8E8;
@@ -56,7 +56,7 @@
     
     .categories-wrapper {
       position: sticky;
-      top: 112px;
+      top: 142px;
       z-index: 99;
       background: white;
       padding: 16px 0 12px;
@@ -121,8 +121,8 @@
     
     .item-info { padding: 12px; }
     .item-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .item-description { font-size: 12px; color: var(--text-light); margin-bottom: 8px;}
-    .item-price { font-size: 18px; font-weight: 800; color: var(--primary);}
+    .item-description { font-size: 12px; color: var(--text-light); margin-bottom: 8px; }
+    .item-price { font-size: 18px; font-weight: 800; color: var(--primary); }
     
     /* Customization Drawer */
     .drawer-overlay {
@@ -154,7 +154,7 @@
       z-index: 1000;
       transform: translateY(100%);
       transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      max-height: 100vh;
+      max-height: 90vh;
       display: flex;
       flex-direction: column;
     }
@@ -170,23 +170,20 @@
     }
     
     .drawer-header {
-      padding: 0 20px 2px;
+      padding: 0 20px 16px;
       border-bottom: 1px solid var(--gray);
-      flex-shrink: 0;
     }
     
     .drawer-item-image {
       width: 100%;
-      height: 180px;
+      height: 200px;
       object-fit: cover;
     }
     
-    .drawer-item-info { 
-      padding: 16px 20px; 
-    }
-    .drawer-item-name { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-    .drawer-item-description { color: var(--text-light); line-height: 1; margin-bottom: 10px; }
-    .drawer-item-price { font-size: 18px; font-weight: 800; color: var(--primary);}
+    .drawer-item-info { padding: 16px 20px; }
+    .drawer-item-name { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .drawer-item-description { color: var(--text-light); line-height: 1.5; margin-bottom: 12px; }
+    .drawer-item-price { font-size: 24px; font-weight: 800; color: var(--primary); }
     
     .close-drawer-btn {
       position: absolute;
@@ -205,34 +202,29 @@
     .drawer-content {
       flex: 1;
       overflow-y: auto;
-      overflow-x: hidden;
-      padding: 18px 14px;
-      min-height: 0;
-      -webkit-overflow-scrolling: touch;
+      padding: 20px;
     }
     
     .customization-category {
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
     
     .category-name {
-      font-size: 17px;
+      font-size: 16px;
       font-weight: 700;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       color: var(--dark);
     }
     
     .customization-option {
       display: flex;
       align-items: center;
-      padding: 16px;
+      padding: 14px;
       background: var(--light-gray);
       border-radius: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       cursor: pointer;
       transition: all 0.2s;
-      width: 100%;
-      min-height: 56px;
     }
     
     .customization-option:active { transform: scale(0.98); }
@@ -287,12 +279,10 @@
     }
     
     .drawer-footer {
-      padding: 16px 20px 20px 20px;
+      padding: 16px 20px;
       border-top: 1px solid var(--gray);
       display: flex;
       gap: 12px;
-      flex-shrink: 0;
-      background: white;
     }
     
     .qty-controls {
@@ -377,7 +367,7 @@
 <body>
   <div class="header">
     <div class="header-top">
-      <h1 id="restaurantName"><img src='https://raw.githubusercontent.com/marshalique-blip/resources/main/images1/soulBites.jpg' alt= 'logo'> Loading...</h1>
+      <h1 id="restaurantName">🍔 Loading...</h1>
     </div>
     <div class="search-bar">
       <input type="text" class="search-input" placeholder="Search menu..." id="searchInput">
@@ -398,10 +388,9 @@
       <img id="drawerItemImage" class="drawer-item-image">
       <button class="close-drawer-btn" onclick="closeCustomizationDrawer()">×</button>
       <div class="drawer-item-info">
-        <div class="drawer-name-price" style="display: flex; justify-content: space-between;"><h2 class="drawer-item-name" id="drawerItemName"></h2>
-        <h2 class="drawer-item-price" id="drawerItemPrice"></h2></div>
+        <h2 class="drawer-item-name" id="drawerItemName"></h2>
         <p class="drawer-item-description" id="drawerItemDescription"></p>
-        
+        <div class="drawer-item-price" id="drawerItemPrice"></div>
       </div>
     </div>
     <div class="drawer-content" id="customizationsContainer">
@@ -425,7 +414,7 @@
   </div>
 
   <script>
-    const RESTAURANT_ID = 'c4f64700-25fc-4e0e-98b2-f8c176ae6a47';
+    const RESTAURANT_ID = '0fa03a81-6d4c-4d97-9e49-af73ddcbb449';
     const API_BASE = window.location.origin;
 
     let menuData = [];
