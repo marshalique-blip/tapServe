@@ -122,7 +122,7 @@
     .item-info { padding: 12px; }
     .item-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
     .item-description { font-size: 12px; color: var(--text-light); margin-bottom: 8px; }
-    .item-price { font-size: 18px; font-weight: 800; color: var(--primary); }
+    .item-price { font-size: 18px; font-weight: 800; color: var(--primary); display:inline-block;}
     
     /* Customization Drawer */
     .drawer-overlay {
@@ -399,7 +399,7 @@
       <button class="close-drawer-btn" onclick="closeCustomizationDrawer()">×</button>
       <div class="drawer-item-info">
         <h2 class="drawer-item-name" id="drawerItemName"></h2>
-        <h2 class="drawer-item-price" style= "position: absolute; top: 0; right: 0; margin: 10px;" id="drawerItemPrice"></h2>
+        <h2 class="drawer-item-price" id="drawerItemPrice"></h2>
         <p class="drawer-item-description" id="drawerItemDescription"></p>
         
       </div>
