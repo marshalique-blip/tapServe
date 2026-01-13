@@ -356,7 +356,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             timestamp: new Date().toISOString(),
             notes: notes || ''
         });
-        
+        console.log(`📡 KDS broadcast sent for order ${orderNumber}`);
         res.json({
             success: true,
             order: {
@@ -452,7 +452,7 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
         const { status } = req.query;
-        
+         console.log(`📋 Fetching orders for restaurant: ${restaurantId}`);        
         let query = supabase
             .from('orders')
             .select('*')
@@ -462,6 +462,7 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
         if (status) {
             const statusArray = status.split(',').map(s => s.trim());
             query = query.in('status', statusArray);
+            console.log(`📋 Filtering by status: ${statusArray.join(', ')}`);
         }
         
         const { data, error } = await query;
