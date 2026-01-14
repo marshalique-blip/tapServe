@@ -384,7 +384,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             notes: notes || ''
         });
         console.log(`📡 KDS broadcast sent for order ${orderNumber}`);
-        console.log(`Payload sent to KDS:`, calculatedItems);
+        console.log('Payload sent to KDS:', calculatedItems);
         res.json({
             success: true,
             order: {
