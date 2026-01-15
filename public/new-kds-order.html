@@ -1602,8 +1602,13 @@ function playNewOrderSound() {
                                     data-item-index="${idx}">
                                     ${item.completed ? '✓' : '○'}
                                     </div>
-                                    <div class="item-name">${item.name}</div>
-                                    <div class="item-quantity">${item.quantity}</div>
+                                    <div class="item-name">${item.name} x${item.quantity}</div>
+                                        ${item.customizations && item.customizations.length > 0 ? `
+                                        <div class="item-customizations">
+                                        ${item.customizations.map(c => `+ ${c.name}`).join(', ')}
+                                        </div>
+                                        ` : ''}
+                                        ${item.special_notes ? `<div class="item-notes">Note: ${item.special_notes}</div>` : ''}
                                 </div>
                             </div>
                         `).join('')}
