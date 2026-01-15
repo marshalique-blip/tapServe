@@ -334,7 +334,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 customer_name: customer_name,
                 phone_number: phone_number,
                 order_source: order_type?.toLowerCase() || 'walk-in',
-                order_items: JSON.stringify(calculatedItems),
+                order_items: calculatedItems,
                 total_amount: total.toFixed(2),
                 user_input: notes || '',
                 status: 'new'
