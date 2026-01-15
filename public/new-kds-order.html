@@ -421,6 +421,21 @@
             color: #666;
         }
 
+        .item-customizations {
+            font-size: 12px;
+            color: #666;
+            padding-left: 32px;
+            margin-top: 4px;
+        }
+
+        .item-notes {
+            font-size: 11px;
+            color: #999;
+            font-style: italic;
+            padding-left: 32px;
+            margin-top: 4px;
+        }
+
         .order-actions {
             padding: 16px;
             background: #fafafa;
@@ -1597,19 +1612,21 @@ function playNewOrderSound() {
                         ${order.items.map((item, idx) => `
                             <div class="order-item">
                                 <div class="item-header">
-                                   <div class="item-check ${item.completed ? '' : 'pending'}" 
-                                    data-order-id="${order.id}" 
-                                    data-item-index="${idx}">
-                                    ${item.completed ? '✓' : '○'}
+                                    <div class="item-check ${item.completed ? '' : 'pending'}" 
+                                        data-order-id="${order.id}" 
+                                        data-item-index="${idx}">
+                                        ${item.completed ? '✓' : '○'}
                                     </div>
                                     <div class="item-name">${item.name} x${item.quantity}</div>
-                                        ${item.customizations && item.customizations.length > 0 ? `
-                                        <div class="item-customizations">
-                                        ${item.customizations.map(c => `+ ${c.name}`).join(', ')}
-                                        </div>
-                                        ` : ''}
-                                        ${item.special_notes ? `<div class="item-notes">Note: ${item.special_notes}</div>` : ''}
                                 </div>
+                                ${item.customizations && item.customizations.length > 0 ? `
+                                    <div class="item-customizations">
+                                        ${item.customizations.map(c => `+ ${c.name}`).join(', ')}
+                                    </div>
+                                ` : ''}
+                                ${item.special_notes ? `
+                                    <div class="item-notes">Note: ${item.special_notes}</div>
+                                ` : ''}
                             </div>
                         `).join('')}
                     </div>
