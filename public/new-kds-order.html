@@ -1927,12 +1927,16 @@ function playNewOrderSound() {
             itemsArray = data.items.map(item => ({
                 name: item.name || 'Unknown Item',
                 quantity: item.quantity || 1,
+                customizations: item.customizations || [],  // ← ADD THIS
+                special_notes: item.special_notes || '',     // ← ADD THIS
                 completed: false
             }));
         } else if (data.orderItems && Array.isArray(data.orderItems)) {
             itemsArray = data.orderItems.map(item => ({
                 name: typeof item === 'string' ? item : item.name,
                 quantity: item.quantity || 1,
+                customizations: item.customizations || [],  // ← ADD THIS
+                special_notes: item.special_notes || '',     // ← ADD THIS
                 completed: false
             }));
         } else if (typeof data.items === 'string') {
@@ -1941,6 +1945,8 @@ function playNewOrderSound() {
                 itemsArray = parsed.map(item => ({
                     name: item.name,
                     quantity: item.quantity || 1,
+                    customizations: item.customizations || [],  // ← ADD THIS
+                    special_notes: item.special_notes || '',     // ← ADD THIS
                     completed: false
                 }));
             } catch (e) {
