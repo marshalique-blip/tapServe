@@ -334,7 +334,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 customer_name: customer_name,
                 phone_number: phone_number,
                 order_source: order_type?.toLowerCase() || 'walk-in',
-                order_items: calculatedItems,
+                order_items: JSON.stringify(calculatedItems),
                 total_amount: total.toFixed(2),
                 user_input: notes || '',
                 status: 'new'
@@ -384,7 +384,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             notes: notes || ''
         });
         console.log(`📡 KDS broadcast sent for order ${orderNumber}`);
-        console.log('Payload sent to KDS:', calculatedItems);
+        console.log('📡 Broadcasting to KDS:', JSON.stringify(calculatedItems, null, 2));
         res.json({
             success: true,
             order: {
