@@ -1804,6 +1804,8 @@ function playNewOrderSound() {
                 items = items.map(item => ({
                     name: item.name || 'Unknown',
                     quantity: item.quantity || 1,
+                    customizations: item.customizations || [],  // ← ADD THIS
+                    special_notes: item.special_notes || '',     // ← ADD THIS
                     completed: item.completed || false
                 }));
                 
