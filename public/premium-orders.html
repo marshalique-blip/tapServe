@@ -822,23 +822,6 @@
       z-index: 998;
     }
     
-    /* iOS Scroll Fix */
-    body {
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior-y: none;
-    }
-
-    .categories-wrapper {
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
-      will-change: transform;
-    }
-
-    .menu-section {
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
-    }
-
     .cart-fab.show { display: flex; }
     
     .cart-badge {
@@ -1137,30 +1120,22 @@
     }
 
     // ============================================
-    // SCROLL TO CATEGORY (iOS SAFE)
+    // SCROLL TO CATEGORY
     // ============================================
     function scrollToCategory(catId) {
       const section = document.getElementById(`category-${catId}`);
-      if (!section) return;
-      
-      const headerHeight = 142;
-      const categoriesHeight = 70;
-      const offset = headerHeight + categoriesHeight + 10;
-      const elementPosition = section.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - offset;
-      
-      // Disable scroll spy during programmatic scroll
-      isScrolling = true;
-      
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
-      
-      // Re-enable scroll spy after scroll completes
-      setTimeout(() => {
-        isScrolling = false;
-      }, 600);
+      if (section) {
+        const headerHeight = 142;
+        const categoriesHeight = 70;
+        const offset = headerHeight + categoriesHeight + 10;
+        const elementPosition = section.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - offset;
+        
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        });
+      }
     }
 
     // ============================================
@@ -1188,95 +1163,24 @@
     }
 
     // ============================================
-    // SCROLL SPY (iOS 26.2 FIX)
+    // SCROLL SPY
     // ============================================
-    let scrollSpyObserver = null;
-    let isScrolling = false;
-    let scrollTimeout = null;
-
     function setupScrollSpy() {
-      // Disconnect existing observer if any
-      if (scrollSpyObserver) {
-        scrollSpyObserver.disconnect();
-      }
-      
-      // Use passive scroll listener instead of IntersectionObserver for iOS
-      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-      
-      if (isIOS) {
-        // iOS: Use scroll event with throttling
-        window.addEventListener('scroll', handleScrollForIOS, { passive: true });
-      } else {
-        // Other platforms: Use IntersectionObserver
-        scrollSpyObserver = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const catId = entry.target.dataset.category;
-              updateActiveCategoryChip(catId);
-            }
-          });
-        }, { 
-          rootMargin: '-200px 0px -60% 0px',
-          threshold: [0, 0.25, 0.5, 0.75, 1]
-        });
-
-        document.querySelectorAll('.menu-section').forEach(section => {
-          scrollSpyObserver.observe(section);
-        });
-      }
-    }
-
-    function handleScrollForIOS() {
-      if (isScrolling) return;
-      
-      isScrolling = true;
-      
-      // Clear existing timeout
-      if (scrollTimeout) {
-        clearTimeout(scrollTimeout);
-      }
-      
-      // Throttle to every 100ms
-      scrollTimeout = setTimeout(() => {
-        const sections = document.querySelectorAll('.menu-section');
-        const scrollPos = window.scrollY + 250; // Offset for sticky header
-        
-        let activeSection = null;
-        
-        sections.forEach(section => {
-          const sectionTop = section.offsetTop;
-          const sectionHeight = section.offsetHeight;
-          
-          if (scrollPos >= sectionTop && scrollPos < sectionTop + sectionHeight) {
-            activeSection = section.dataset.category;
-          }
-        });
-        
-        if (activeSection) {
-          updateActiveCategoryChip(activeSection);
-        }
-        
-        isScrolling = false;
-      }, 100);
-    }
-
-    function updateActiveCategoryChip(catId) {
-      // Prevent chip scrolling from interfering with page scroll
-      requestAnimationFrame(() => {
-        document.querySelectorAll('.category-chip').forEach(chip => {
-          const isActive = chip.dataset.category === catId;
-          chip.classList.toggle('active', isActive);
-          
-          if (isActive) {
-            // Smooth scroll chip into view without affecting page scroll
-            chip.scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'nearest', 
-              inline: 'center' 
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const catId = entry.target.dataset.category;
+            document.querySelectorAll('.category-chip').forEach(chip => {
+              chip.classList.toggle('active', chip.dataset.category === catId);
+              if (chip.dataset.category === catId) {
+                chip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+              }
             });
           }
         });
-      });
+      }, { rootMargin: '-200px 0px -60% 0px' });
+
+      document.querySelectorAll('.menu-section').forEach(section => observer.observe(section));
     }
 
     // ============================================
