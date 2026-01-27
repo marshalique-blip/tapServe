@@ -4,6 +4,7 @@ const axios = require('axios');
 const http = require('http');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 
 // ============================================
 // INITIALIZE APP & SERVER
@@ -58,6 +59,19 @@ app.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         connections: io.engine.clientsCount
     });
+});
+
+// ============================================
+// SERVE ORDERING FORM AT ROOT
+// ============================================
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'premium-orders.html'));
+});
+
+// Keep the direct route accessible too
+app.get('/premium-orders.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'premium-orders.html'));
 });
 
 // ============================================
