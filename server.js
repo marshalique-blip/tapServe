@@ -373,11 +373,11 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             }).join('\n');
             
             const confirmationMessage = `✅ *Order Confirmed!*\n\n` +
-                `🏪 ${restaurantName}\n` +
-                `📋 Order #${orderNumber}\n\n` +
+                `${restaurantName}\n` +
+                `Order #${orderNumber}\n\n` +
                 `*Your Order:*\n` +
                 itemsText +
-                `\n\n💰 *Total: $${total.toFixed(2)}*\n\n` +
+                `\n\n*Total: $${total.toFixed(2)}*\n\n` +
                 `Thank you! We'll send you updates as your order is prepared.`;
             
             sendWhatsAppMessage(phone_number, confirmationMessage);
@@ -466,11 +466,11 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
             else if (status === 'ready' && currentOrder.status === 'preparing') {
                 message = `✅ *Order Ready!*\n\n` +
                     `Order #${data.order_number}\n\n` +
-                    `Your order is ready for pickup! 🎉`;
+                    `Your order is ready for pickup!`;
                 shouldSend = true;
             }
             else if (status === 'completed' && currentOrder.status === 'ready') {
-                message = `🎊 *Order Completed*\n\n` +
+                message = `*Order Completed*\n\n` +
                     `Order #${data.order_number}\n\n` +
                     `Thank you for your order! 😊`;
                 shouldSend = true;
