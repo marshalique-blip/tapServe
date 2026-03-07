@@ -1104,7 +1104,7 @@
     // ============================================
     async function loadMenu() {
       try {
-        document.getElementById('restaurantName').textContent = 'Soul Bites';
+        document.getElementById('restaurantName').textContent = '';
         
         const res = await fetch(`${API_BASE}/api/restaurants/${RESTAURANT_ID}/menu?available_only=true`);
         const data = await res.json();
