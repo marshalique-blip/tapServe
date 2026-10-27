@@ -48,6 +48,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ============================================
 // MIDDLEWARE
 // ============================================
+const allowedOrigins = [
+    'https://www.tapserve.arrilan.com',
+    'https://tapserve.arrilan.com'
+];
+
+app.use(cors({
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+}));
+
 app.use(express.json());
 app.use(express.static('public'));
 
