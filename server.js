@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
 const http = require('http');
