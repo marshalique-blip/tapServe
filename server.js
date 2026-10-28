@@ -6,6 +6,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const { webhookRouter, statusRouter, startPaymentExpiryJob, newPaymentRef, UNPAID_STATUSES } = require('./payments');
+const { buildPaymentLink } = require('./fygaro');
 
 // ============================================
 // INITIALIZE APP & SERVER
@@ -59,8 +61,11 @@ app.use(cors({
     allowedHeaders: ['Content-Type']
 }));
 
+app.use(webhookRouter({ supabase, io, sendWhatsAppMessage }));
 app.use(express.json());
 app.use(express.static('public'));
+app.use(statusRouter({ supabase }));
+startPaymentExpiryJob(supabase);
 
 // ============================================
 // HEALTH CHECK
@@ -460,10 +465,46 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         const tax = subtotal * taxRate;
         const total = subtotal + tax;
         
+                if (!(total > 0)) {
+            return res.status(400).json({ error: 'Order total must be greater than zero' });
+        }
+
         const orderNumber = "UD" + Math.floor(1000 + Math.random() * 9000);
         const orderId = uuidv4();
-        
-        const { data: savedOrder, error: dbError } = await supabase
+        const paymentRef = newPaymentRef();
+
+        // Built now, sent only after payment succeeds (see payments.js)
+        const kdsPayload = {
+            id: orderId,
+            orderNumber: orderNumber,
+            customerName: customer_name,
+            phone: phone_number,
+            orderType: order_type || 'Walk-in',
+            items: calculatedItems,
+            subtotal: subtotal.toFixed(2),
+            tax: tax.toFixed(2),
+            total: total.toFixed(2),
+            notes: notes || ''
+        };
+
+        const itemsText = calculatedItems.map(item => {
+            let itemStr = `• ${item.name} x${item.quantity}`;
+            if (item.customizations && item.customizations.length > 0) {
+                itemStr += `\n  + ${item.customizations.map(c => c.name).join(', ')}`;
+            }
+            itemStr += ` - $${item.item_total.toFixed(2)}`;
+            return itemStr;
+        }).join('\n');
+
+        const confirmationMessage = `✅ *Payment received – Order Confirmed!*\n\n` +
+            `${restaurantName}\n` +
+            `Order #${orderNumber}\n\n` +
+            `*Your Order:*\n` +
+            itemsText +
+            `\n\n*Total paid: $${total.toFixed(2)}*\n\n` +
+            `Thank you! We'll send you updates as your order is prepared.`;
+
+        const { error: dbError } = await supabase
             .from('orders')
             .insert([{
                 id: orderId,
@@ -475,59 +516,23 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 order_items: JSON.stringify(calculatedItems),
                 total_amount: total.toFixed(2),
                 user_input: notes || '',
-                status: 'new'
-            }])
-            .select()
-            .single();
-        
+                status: 'pending_payment',          // stays off the KDS until the webhook confirms payment
+                payment_ref: paymentRef,
+                kds_payload: kdsPayload,
+                confirmation_message: confirmationMessage
+            }]);
+
         if (dbError) throw dbError;
-        
-        console.log(`✅ Order created: ${orderNumber} - $${total.toFixed(2)}`);
-        
-        // Send WhatsApp confirmation
-        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN) {
-            const itemsText = calculatedItems.map(item => {
-                let itemStr = `• ${item.name} x${item.quantity}`;
-                if (item.customizations && item.customizations.length > 0) {
-                    const customText = item.customizations.map(c => c.name).join(', ');
-                    itemStr += `\n  + ${customText}`;
-                }
-                itemStr += ` - $${item.item_total.toFixed(2)}`;
-                return itemStr;
-            }).join('\n');
-            
-            const confirmationMessage = `✅ *Order Confirmed!*\n\n` +
-                `${restaurantName}\n` +
-                `Order #${orderNumber}\n\n` +
-                `*Your Order:*\n` +
-                itemsText +
-                `\n\n*Total: $${total.toFixed(2)}*\n\n` +
-                `Thank you! We'll send you updates as your order is prepared.`;
-            
-            sendWhatsAppMessage(phone_number, confirmationMessage);
-        }
-        
-        io.emit('new-kds-order', {
-            id: orderId,
-            orderNumber: orderNumber,
-            customerName: customer_name,
-            phone: phone_number,
-            orderType: order_type || 'Walk-in',
-            items: calculatedItems,
-            subtotal: subtotal.toFixed(2),
-            tax: tax.toFixed(2),
-            total: total.toFixed(2),
-            status: 'new',
-            timestamp: new Date().toISOString(),
-            notes: notes || ''
-        });
-        console.log(`📡 KDS broadcast sent for order ${orderNumber}`);
-        console.log('📡 Broadcasting to KDS:', JSON.stringify(calculatedItems, null, 2));
+
+        console.log(`🧾 Order created (awaiting payment): ${orderNumber} - $${total.toFixed(2)}`);
+
         res.json({
             success: true,
+            payment_url: buildPaymentLink({ paymentRef, total }),
             order: {
                 id: orderId,
                 order_number: orderNumber,
+                payment_ref: paymentRef,
                 items: calculatedItems,
                 subtotal: subtotal.toFixed(2),
                 tax: tax.toFixed(2),
@@ -559,6 +564,10 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
         
         if (fetchError) {
             return res.status(500).json({ success: false, error: fetchError.message });
+        }
+
+                if (UNPAID_STATUSES.includes(currentOrder.status)) {
+            return res.status(409).json({ success: false, error: 'Order has not been paid' });
         }
         // Update in database
         const { data, error } = await supabase
@@ -633,6 +642,9 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
             .select('*')
             .eq('restaurant_id', restaurantId)
             .order('created_at', { ascending: false });
+            
+            query = query.not('status', 'in', `(${UNPAID_STATUSES.join(',')})`);
+            
         // Filter by status if provided (?status=new,preparing,ready)
         if (status) {
             const statusArray = status.split(',').map(s => s.trim());
@@ -675,6 +687,7 @@ app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
             .eq('id', orderId)
             .eq('restaurant_id', restaurantId)
             .single();
+            
         
         if (error || !data) {
             return res.status(404).json({ error: 'Order not found' });
@@ -698,6 +711,8 @@ app.get('/api/orders', async (req, res) => {
             .from('orders')
             .select('*')
             .order('created_at', { ascending: false });
+
+            query = query.not('status', 'in', `(${UNPAID_STATUSES.join(',')})`);
         
         if (status) {
             const statusArray = status.split(',');
@@ -734,7 +749,8 @@ app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
             .from('orders')
             .select('total_amount, status')
             .eq('restaurant_id', restaurantId)
-            .gte('created_at', today.toISOString());
+            .gte('created_at', today.toISOString())
+            .not('status', 'in', `(${UNPAID_STATUSES.join(',')})`);
         
         const stats = {
             menu: {
