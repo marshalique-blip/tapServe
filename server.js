@@ -249,6 +249,118 @@ app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
     }
 });
 
+
+// ============================================
+// MENU MANAGEMENT (write routes)
+// ============================================
+
+// Optional write protection: only enforced when ADMIN_TOKEN is set on Render
+function requireAdminToken(req, res, next) {
+    const expected = process.env.ADMIN_TOKEN;
+    if (!expected) return next();
+    if (req.get('x-admin-token') !== expected) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    next();
+}
+
+// Toggle one item in/out of stock
+app.patch('/api/restaurants/:restaurantId/menu/:itemId/availability', requireAdminToken, async (req, res) => {
+    try {
+        const { restaurantId, itemId } = req.params;
+        const { is_available } = req.body;
+
+        if (typeof is_available !== 'boolean') {
+            return res.status(400).json({ success: false, error: 'is_available must be true or false' });
+        }
+
+        const { data, error } = await supabase
+            .from('menu_items')
+            .update({ is_available })
+            .eq('id', itemId)
+            .eq('restaurant_id', restaurantId)
+            .select();
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            return res.status(404).json({ success: false, error: 'Item not found' });
+        }
+
+        res.json({ success: true, item: data[0] });
+    } catch (err) {
+        console.error('Update availability error:', err);
+        res.status(500).json({ success: false, error: 'Failed to update availability' });
+    }
+});
+
+// Bulk in/out of stock
+app.post('/api/restaurants/:restaurantId/menu/bulk-availability', requireAdminToken, async (req, res) => {
+    try {
+        const { restaurantId } = req.params;
+        const { item_ids, is_available } = req.body;
+
+        if (!Array.isArray(item_ids) || item_ids.length === 0 || typeof is_available !== 'boolean') {
+            return res.status(400).json({ success: false, error: 'item_ids (array) and is_available (boolean) are required' });
+        }
+
+        const { data, error } = await supabase
+            .from('menu_items')
+            .update({ is_available })
+            .in('id', item_ids)
+            .eq('restaurant_id', restaurantId)
+            .select('id');
+
+        if (error) throw error;
+
+        res.json({ success: true, updated_count: data.length });
+    } catch (err) {
+        console.error('Bulk availability error:', err);
+        res.status(500).json({ success: false, error: 'Failed to update items' });
+    }
+});
+
+// Edit item details
+app.put('/api/restaurants/:restaurantId/menu/:itemId', requireAdminToken, async (req, res) => {
+    try {
+        const { restaurantId, itemId } = req.params;
+        const { name, description, price, is_available, image_url } = req.body;
+
+        if (typeof name !== 'string' || !name.trim()) {
+            return res.status(400).json({ success: false, error: 'Name is required' });
+        }
+        if (!Number.isFinite(price) || price < 0) {
+            return res.status(400).json({ success: false, error: 'Price must be a number, 0 or higher' });
+        }
+        if (typeof is_available !== 'boolean') {
+            return res.status(400).json({ success: false, error: 'is_available must be true or false' });
+        }
+
+        const { data, error } = await supabase
+            .from('menu_items')
+            .update({
+                name: name.trim(),
+                description: description || '',
+                price,
+                is_available,
+                image_url: image_url || null
+            })
+            .eq('id', itemId)
+            .eq('restaurant_id', restaurantId)
+            .select();
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            return res.status(404).json({ success: false, error: 'Item not found' });
+        }
+
+        res.json({ success: true, item: data[0] });
+    } catch (err) {
+        console.error('Update item error:', err);
+        res.status(500).json({ success: false, error: 'Failed to update item' });
+    }
+});
+
+
 // ============================================
 // UPDATED: CREATE ORDER WITH CUSTOMIZATIONS
 // ============================================
