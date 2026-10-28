@@ -1510,19 +1510,14 @@
         
         const data = await response.json();
         
-        if (data.success) {
-          closeCheckout();
-          
-          document.getElementById('modalOrderNumber').textContent = data.order.order_number;
-          document.getElementById('successModal').classList.add('show');
-          
-          startWhatsAppCountdown(data.order.order_number);
-          
-          cart = [];
-          updateCartBadge();
-          
-          document.getElementById('customerForm').reset();
-        } else {
+       if (data.success) {
+  try { sessionStorage.setItem('paymentRef', data.order.payment_ref); } catch (_) {}
+  window.location.href = data.payment_url;   // customer pays on Fygaro
+  return;                                    // the order is confirmed only after the webhook arrives
+  
+        }
+        
+        else {
           alert(data.error || 'Failed to place order');
         }
       } catch (error) {
