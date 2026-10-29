@@ -6,8 +6,11 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
-const { webhookRouter, statusRouter, startPaymentExpiryJob, newPaymentRef, UNPAID_STATUSES } = require('./payments');
+const { webhookRouter, statusRouter, startPaymentExpiryJob, newPaymentRef, runSideEffects, UNPAID_STATUSES } = require('./payments');
+const { panelRouter } = require('./panel-routes');
 const { buildPaymentLink } = require('./fygaro');
+const { getSettings } = require('./settings');
+
 
 // ============================================
 // INITIALIZE APP & SERVER
@@ -380,6 +383,18 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             });
         }
         
+        const cfg = await getSettings(supabase);
+        if (!cfg.accepting_orders) {
+            return res.status(503).json({ error: cfg.closed_message, closed: true });
+        }
+        if (order_type === 'Delivery' && !cfg.delivery_enabled) {
+            return res.status(400).json({ error: 'Delivery is not available right now' });
+        }
+        if (order_type === 'Takeout' && !cfg.takeout_enabled) {
+            return res.status(400).json({ error: 'Takeout is not available right now' });
+        }
+        const demo = !cfg.card_processing;   // card processing OFF in the admin panel = demo mode
+
         // Get restaurant settings for tax rate
         const { data: restaurant, error: restError } = await supabase
             .from('restaurants')
@@ -469,11 +484,18 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             return res.status(400).json({ error: 'Order total must be greater than zero' });
         }
 
+         if (!(total > 0)) {
+            return res.status(400).json({ error: 'Order total must be greater than zero' });
+        }
+
         const orderNumber = "UD" + Math.floor(1000 + Math.random() * 9000);
         const orderId = uuidv4();
         const paymentRef = newPaymentRef();
 
-        // Built now, sent only after payment succeeds (see payments.js)
+        // Built before saving so a payment-setup problem never leaves an orphan order
+        const paymentUrl = demo ? null : buildPaymentLink({ paymentRef, total });
+
+        // Built now; sent when the order is confirmed (immediately in demo mode, after payment otherwise)
         const kdsPayload = {
             id: orderId,
             orderNumber: orderNumber,
@@ -496,15 +518,15 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             return itemStr;
         }).join('\n');
 
-        const confirmationMessage = `✅ *Payment received – Order Confirmed!*\n\n` +
+        const confirmationMessage = `✅ *${demo ? 'Order Confirmed!' : 'Payment received – Order Confirmed!'}*\n\n` +
             `${restaurantName}\n` +
             `Order #${orderNumber}\n\n` +
             `*Your Order:*\n` +
             itemsText +
-            `\n\n*Total paid: $${total.toFixed(2)}*\n\n` +
+            `\n\n*${demo ? 'Total' : 'Total paid'}: $${total.toFixed(2)}*\n\n` +
             `Thank you! We'll send you updates as your order is prepared.`;
 
-        const { error: dbError } = await supabase
+        const { data: savedOrder, error: dbError } = await supabase
             .from('orders')
             .insert([{
                 id: orderId,
@@ -516,23 +538,31 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 order_items: JSON.stringify(calculatedItems),
                 total_amount: total.toFixed(2),
                 user_input: notes || '',
-                status: 'pending_payment',          // stays off the KDS until the webhook confirms payment
-                payment_ref: paymentRef,
+                status: demo ? 'new' : 'pending_payment',   // pending orders stay off the KDS until paid
+                payment_mode: demo ? 'demo' : 'card',
+                payment_ref: demo ? null : paymentRef,
                 kds_payload: kdsPayload,
                 confirmation_message: confirmationMessage
-            }]);
+            }])
+            .select()
+            .single();
 
         if (dbError) throw dbError;
 
-        console.log(`🧾 Order created (awaiting payment): ${orderNumber} - $${total.toFixed(2)}`);
+        if (demo) {
+            console.log(`🧾 Order created (demo mode, no payment): ${orderNumber} - $${total.toFixed(2)}`);
+            await runSideEffects({ supabase, io, sendWhatsAppMessage }, savedOrder);   // KDS ticket + WhatsApp, like before
+        } else {
+            console.log(`🧾 Order created (awaiting payment): ${orderNumber} - $${total.toFixed(2)}`);
+        }
 
         res.json({
             success: true,
-            payment_url: buildPaymentLink({ paymentRef, total }),
+            ...(paymentUrl ? { payment_url: paymentUrl } : {}),
             order: {
                 id: orderId,
                 order_number: orderNumber,
-                payment_ref: paymentRef,
+                payment_ref: demo ? null : paymentRef,
                 items: calculatedItems,
                 subtotal: subtotal.toFixed(2),
                 tax: tax.toFixed(2),
@@ -540,6 +570,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 tax_rate: (taxRate * 100).toFixed(1) + '%'
             }
         });
+
         
     } catch (err) {
         console.error('Create order error:', err);
@@ -586,7 +617,7 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
         
         console.log(`📝 Order ${data.order_number} status: ${currentOrder.status} → ${status}`);
         // Send WhatsApp notifications for status changes
-        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.phone_number) {
+        if (process.env.META_PHONE_ID && process.env.META_ACCESS_TOKEN && currentOrder.phone_number && (await getSettings(supabase)).whatsapp_confirmations) {
             let message = '';
             let shouldSend = false;
             
