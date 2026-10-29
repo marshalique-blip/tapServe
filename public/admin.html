@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Admin · Tap & Serve</title>
+<link rel="stylesheet" href="/panel.css">
+</head><body><main>
+
+<section id="login" class="card" style="margin-top:12vh">
+  <h1>Admin</h1><p class="muted">Tap &amp; Serve controls</p>
+  <label for="pw">Admin password</label>
+  <input id="pw" type="password" autocomplete="current-password">
+  <div class="actions"><button id="go">Sign in</button></div>
+  <div class="err" id="loginErr" role="alert"></div>
+</section>
+
+<section id="panel" hidden>
+  <div class="top"><h1>Controls</h1><button class="ghost" id="out">Sign out</button></div>
+  <div id="warn"></div>
+
+  <div class="card">
+    <div class="row">
+      <div><b>Card processing <span class="pill" id="cardPill"></span></b>
+        <small id="cardHelp"></small></div>
+      <button class="switch" role="switch" aria-label="Card processing" data-key="card_processing" aria-checked="true"></button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Ordering</h2>
+    <div class="row"><div><b>Accepting orders</b><small>Off shows customers a “closed” message</small></div>
+      <button class="switch" role="switch" aria-label="Accepting orders" data-key="accepting_orders" aria-checked="true"></button></div>
+    <div class="row"><div><b>Delivery</b></div>
+      <button class="switch" role="switch" aria-label="Delivery" data-key="delivery_enabled" aria-checked="true"></button></div>
+    <div class="row"><div><b>Takeout</b></div>
+      <button class="switch" role="switch" aria-label="Takeout" data-key="takeout_enabled" aria-checked="true"></button></div>
+    <div class="row"><div><b>WhatsApp messages</b><small>Order confirmations and status updates (turn off for demos)</small></div>
+      <button class="switch" role="switch" aria-label="WhatsApp messages" data-key="whatsapp_confirmations" aria-checked="true"></button></div>
+    <label for="closedMsg">Message shown when closed</label>
+    <input id="closedMsg" maxlength="200">
+    <label for="timeout">Unpaid order expires after (minutes)</label>
+    <input id="timeout" type="number" min="5" max="240" inputmode="numeric">
+    <div class="actions"><button id="saveText">Save these two</button></div>
+    <div class="err" id="saveErr" role="alert"></div>
+  </div>
+
+  <div class="card">
+    <h2>Managers</h2>
+    <p class="muted">Only managers can approve a short payment. Each has their own PIN so every approval carries a name.</p>
+    <div id="mgrs"></div>
+    <label for="mName">Name</label><input id="mName" maxlength="60" autocomplete="off">
+    <label for="mPin">PIN (4–8 digits, 6 recommended)</label><input id="mPin" inputmode="numeric" maxlength="8" autocomplete="off">
+    <div class="actions"><button id="addM">Add manager</button></div>
+    <div class="err" id="mErr" role="alert"></div>
+  </div>
+  <p class="muted"><a href="/manager.html">Manager screen →</a></p>
+</section>
+
+</main>
+<script>
+const $=(i)=>document.getElementById(i);
+const esc=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let token=null; try{token=sessionStorage.getItem('adminToken')}catch(_){}
+let S=null;
+
+async function api(method,path,body){
+  const r=await fetch(path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
+  const j=await r.json().catch(()=>({}));
+  if(r.status===401&&token){ signOut(); }
+  if(!r.ok) throw new Error(j.error||'Something went wrong');
+  return j;
+}
+function signOut(){ token=null; try{sessionStorage.removeItem('adminToken')}catch(_){} $('panel').hidden=true; $('login').hidden=false; }
+
+$('go').onclick=async()=>{
+  $('loginErr').textContent='';
+  try{ const j=await api('POST','/api/admin/login',{password:$('pw').value}); token=j.token; try{sessionStorage.setItem('adminToken',token)}catch(_){} $('pw').value=''; load(); }
+  catch(e){ $('loginErr').textContent=e.message; }
+};
+$('pw').addEventListener('keydown',e=>{ if(e.key==='Enter') $('go').click(); });
+$('out').onclick=signOut;
+
+function render(d){
+  S=d.settings;
+  document.querySelectorAll('.switch').forEach(b=>b.setAttribute('aria-checked',String(!!S[b.dataset.key])));
+  const on=S.card_processing;
+  $('cardPill').textContent=on?'ON':'OFF · demo mode'; $('cardPill').className='pill'+(on?'':' off');
+  $('cardHelp').textContent=on?'Customers pay through Fygaro before the order reaches the kitchen.':'Orders skip payment and go straight to the kitchen, like the original version. Takes effect on the next order.';
+  $('closedMsg').value=S.closed_message; $('timeout').value=S.payment_timeout_min;
+  let w='';
+  if(!d.fygaro_configured) w+='<div class="banner bad">Fygaro is not fully configured on the server (button URL, API key or secret missing). Card payments will fail until it is.</div>';
+  if(!S.accepting_orders) w+='<div class="banner">Ordering is currently closed to customers.</div>';
+  if(!S.card_processing) w+='<div class="banner">Demo mode: card processing is off. No payments are being taken.</div>';
+  if(d.link_mode==='plain'&&S.card_processing) w+='<div class="banner">Payment links are in <b>plain</b> mode: customers can edit the amount on Fygaro’s page. Underpayments are held automatically.</div>';
+  $('warn').innerHTML=w;
+}
+
+async function load(){
+  try{ const d=await api('GET','/api/admin/settings'); $('login').hidden=true; $('panel').hidden=false; render(d); loadMgrs(); }
+  catch(e){ $('loginErr').textContent=e.message; }
+}
+
+async function save(changes){
+  $('saveErr').textContent='';
+  try{ const j=await api('PUT','/api/admin/settings',changes); const d=await api('GET','/api/admin/settings'); render(d); }
+  catch(e){ $('saveErr').textContent=e.message; render({settings:S,fygaro_configured:true}); load(); }
+}
+document.querySelectorAll('.switch').forEach(b=>b.onclick=()=>{
+  const key=b.dataset.key, next=!(S[key]);
+  if(key==='card_processing'&&!next&&!confirm('Turn OFF card processing? New orders will skip payment and go straight to the kitchen.')) return;
+  b.setAttribute('aria-checked',String(next)); save({[key]:next});
+});
+$('saveText').onclick=()=>save({closed_message:$('closedMsg').value,payment_timeout_min:Number($('timeout').value)});
+
+async function loadMgrs(){
+  const {managers}=await api('GET','/api/admin/managers');
+  const act=managers.filter(m=>m.active);
+  $('mgrs').innerHTML=act.length?act.map(m=>`<div class="row"><b>${esc(m.name)}</b><button class="ghost" data-id="${esc(m.id)}">Remove</button></div>`).join(''):'<p class="muted">No managers yet. Add one so short payments can be approved.</p>';
+  $('mgrs').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ if(!confirm('Remove this manager? Their PIN stops working immediately.')) return; try{ await api('POST',`/api/admin/managers/${b.dataset.id}/deactivate`); loadMgrs(); }catch(e){ $('mErr').textContent=e.message; } });
+}
+$('addM').onclick=async()=>{
+  $('mErr').textContent='';
+  try{ await api('POST','/api/admin/managers',{name:$('mName').value,pin:$('mPin').value}); $('mName').value=''; $('mPin').value=''; loadMgrs(); }
+  catch(e){ $('mErr').textContent=e.message; }
+};
+if(token) load();
+</script></body></html>
