@@ -1881,6 +1881,8 @@ function playNewOrderSound() {
         console.log('🔴 Socket Disconnected');
     });
 
+    socket.on('payment-alert', (a) => alert(`Order ${a.orderNumber}: ${a.message}`));
+    
     socket.on('connect_error', (error) => {
         console.error('❌ Socket Connection Error:', error.message);
     });
