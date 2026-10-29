@@ -1484,76 +1484,90 @@
     // PLACE ORDER
     // ============================================
     async function placeOrder(event) {
-      event.preventDefault();
-      
-      const customerName = document.getElementById('customerName').value.trim();
-      const customerPhone = document.getElementById('customerPhone').value.trim();
-      const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
-      const orderType = document.getElementById('orderType').value;
-      const specialNotes = document.getElementById('specialNotes').value.trim();
-      
-      if (!customerName || !customerPhone || !deliveryAddress || !orderType) {
-        alert('Please fill in all required fields');
-        return;
-      }
-      
-      if (cart.length === 0) {
-        alert('Your cart is empty');
-        return;
-      }
-      
-      document.getElementById('checkoutLoading').classList.add('show');
-      document.getElementById('cartItemsContainer').style.display = 'none';
-      
-      const items = cart.map(cartItem => ({
-        id: cartItem.item.id,
-        quantity: cartItem.quantity,
-        customizations: cartItem.customizations.map(c => ({ id: c.id })),
-        special_notes: cartItem.special_notes
-      }));
-      
-      try {
-        const response = await fetch(`${API_BASE}/api/restaurants/${RESTAURANT_ID}/orders`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customer_name: customerName,
-            phone_number: customerPhone,
-            order_type: orderType,
-            items: items,
-            notes: `Delivery: ${deliveryAddress} | ${specialNotes || 'No special instructions'}`
-          })
-        });
-        
-        const data = await response.json();
+  event.preventDefault();
 
-        
-        
-       if (data.success) {
-  if (data.payment_url) {
-    try { sessionStorage.setItem('paymentRef', data.order.payment_ref); } catch (_) {}
-    window.location.href = data.payment_url;   // customer pays on Fygaro
-    return;                                    // confirmed only after the payment arrives
+  if (window.ORDERING_CLOSED) return;
+
+  const customerName = document.getElementById('customerName').value.trim();
+  const customerPhone = document.getElementById('customerPhone').value.trim();
+  const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
+  const orderType = document.getElementById('orderType').value;
+  const specialNotes = document.getElementById('specialNotes').value.trim();
+
+  if (!customerName || !customerPhone || !orderType) {
+    alert('Please fill in all required fields');
+    return;
   }
-  // ...your existing success-modal code continues here unchanged...
-  try { sessionStorage.setItem('paymentRef', data.order.payment_ref); } catch (_) {}
-  window.location.href = data.payment_url;   // customer pays on Fygaro
-  return;                                    // the order is confirmed only after the webhook arrives
-  
-        }
-        
-        else {
-          alert(data.error || 'Failed to place order');
-        }
-      } catch (error) {
-        console.error('Order error:', error);
-        alert('Failed to place order. Please try again.');
-      } finally {
-        document.getElementById('checkoutLoading').classList.remove('show');
-        document.getElementById('cartItemsContainer').style.display = 'block';
-      }
+  if (orderType === 'Delivery' && !deliveryAddress) {
+    alert('Please enter a delivery address');
+    return;
+  }
+  if (cart.length === 0) {
+    alert('Your cart is empty');
+    return;
+  }
+
+  document.getElementById('checkoutLoading').classList.add('show');
+  document.getElementById('cartItemsContainer').style.display = 'none';
+
+  const items = cart.map(cartItem => ({
+    id: cartItem.item.id,
+    quantity: cartItem.quantity,
+    customizations: cartItem.customizations.map(c => ({ id: c.id })),
+    special_notes: cartItem.special_notes
+  }));
+
+  let redirecting = false;
+
+  try {
+    const response = await fetch(`${API_BASE}/api/restaurants/${RESTAURANT_ID}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer_name: customerName,
+        phone_number: customerPhone,
+        order_type: orderType,
+        items: items,
+        notes: `${orderType === 'Delivery' ? 'Delivery: ' + deliveryAddress : 'Takeout'} | ${specialNotes || 'No special instructions'}`
+      })
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      alert(data.error || 'Failed to place order');
+      return;
     }
 
+    if (data.payment_url) {
+      // CARD MODE: send customer to Fygaro. No confirmation until the webhook confirms payment.
+      redirecting = true;
+      try { sessionStorage.setItem('paymentRef', data.order.payment_ref); } catch (_) {}
+      window.location.href = data.payment_url;
+      return;
+    }
+
+    // DEMO MODE: server already confirmed the order
+    closeCheckout();
+    document.getElementById('modalOrderNumber').textContent = data.order.order_number;
+    document.getElementById('successModal').classList.add('show');
+    startWhatsAppCountdown(data.order.order_number);
+
+    cart = [];
+    updateCartBadge();
+    document.getElementById('customerForm').reset();
+
+  } catch (error) {
+    console.error('Order error:', error);
+    alert('Failed to place order. Please try again.');
+  } finally {
+    // Keep the spinner up while the browser navigates to Fygaro
+    if (!redirecting) {
+      document.getElementById('checkoutLoading').classList.remove('show');
+      document.getElementById('cartItemsContainer').style.display = 'block';
+    }
+  }
+}
     // ============================================
     // WHATSAPP REDIRECT
     // ============================================
