@@ -1530,6 +1530,12 @@
         
         
        if (data.success) {
+  if (data.payment_url) {
+    try { sessionStorage.setItem('paymentRef', data.order.payment_ref); } catch (_) {}
+    window.location.href = data.payment_url;   // customer pays on Fygaro
+    return;                                    // confirmed only after the payment arrives
+  }
+  // ...your existing success-modal code continues here unchanged...
   try { sessionStorage.setItem('paymentRef', data.order.payment_ref); } catch (_) {}
   window.location.href = data.payment_url;   // customer pays on Fygaro
   return;                                    // the order is confirmed only after the webhook arrives
