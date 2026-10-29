@@ -68,6 +68,7 @@ app.use(webhookRouter({ supabase, io, sendWhatsAppMessage }));
 app.use(express.json());
 app.use(express.static('public'));
 app.use(statusRouter({ supabase }));
+app.use(panelRouter({ supabase, io, sendWhatsAppMessage }));
 startPaymentExpiryJob(supabase);
 
 // ============================================
