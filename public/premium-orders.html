@@ -1159,6 +1159,22 @@
       }
     }
 
+    async function loadConfig() {
+  try {
+    const c = await (await fetch(`${API_BASE}/api/public-config`)).json();
+    if (c.delivery_enabled === false) document.querySelector('#orderType option[value="Delivery"]')?.remove();
+    if (c.takeout_enabled === false) document.querySelector('#orderType option[value="Takeout"]')?.remove();
+    if (c.accepting_orders === false) {
+      window.ORDERING_CLOSED = true;
+      const b = document.createElement('div');
+      b.textContent = c.closed_message;
+      b.style.cssText = 'background:#b26a00;color:#fff;padding:14px 20px;text-align:center;font-weight:600';
+      document.body.insertBefore(b, document.body.firstChild);
+      document.getElementById('placeOrderBtn').disabled = true;
+    }
+  } catch (_) { /* if this fails the server still enforces the settings */ }
+}
+
     // ============================================
     // RENDER MENU
     // ============================================
@@ -1509,6 +1525,8 @@
         });
         
         const data = await response.json();
+
+        
         
        if (data.success) {
   try { sessionStorage.setItem('paymentRef', data.order.payment_ref); } catch (_) {}
