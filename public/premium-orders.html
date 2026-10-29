@@ -1224,6 +1224,7 @@
     // CUSTOMIZATION DRAWER
     // ============================================
     async function openCustomizationDrawer(itemId) {
+      if (window.ORDERING_CLOSED) return;
       currentItem = findItemById(itemId);
       if (!currentItem) return;
 
@@ -1642,6 +1643,7 @@
       }
       
       loadMenu();
+      loadConfig();
     });
   </script>
 </body>
