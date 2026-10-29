@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirming your payment</title>
+<style>
+  :root { --primary:#395a01; --dark:#1A1A2E; --muted:#6B6B6B; --bg:#F7F7F7; --line:#E8E8E8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; background:var(--bg); color:var(--dark);
+         min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card { background:#fff; border-radius:20px; padding:36px 24px; max-width:400px; width:100%; text-align:center; box-shadow:0 8px 24px rgba(0,0,0,.08); }
+  .icon { width:72px; height:72px; border-radius:50%; margin:0 auto 20px; display:flex; align-items:center; justify-content:center; font-size:34px; color:#fff; }
+  .icon.wait { background:none; border:4px solid var(--line); border-top-color:var(--primary); animation:spin .8s linear infinite; }
+  .icon.ok { background:var(--primary); } .icon.warn { background:#b26a00; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .icon.wait { animation:none; } }
+  h1 { font-size:22px; margin-bottom:10px; }
+  p { color:var(--muted); line-height:1.5; font-size:15px; }
+  .order { margin:18px 0 4px; padding:14px; background:var(--bg); border-left:4px solid var(--primary); border-radius:10px; }
+  .order strong { font-size:26px; color:var(--primary); }
+  .countdown { margin-top:14px; font-size:14px; font-weight:600; }
+  .btn { display:block; width:100%; margin-top:18px; padding:16px; background:#25d366; color:#fff; border:0; border-radius:14px; font-size:17px; font-weight:700; cursor:pointer; text-decoration:none; }
+  .btn:focus-visible { outline:3px solid var(--dark); outline-offset:2px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main class="card" aria-live="polite">
+  <div class="icon wait" id="icon"></div>
+  <h1 id="title">Confirming your payment…</h1>
+  <p id="msg">This usually takes a few seconds. Please keep this page open.</p>
+  <div class="order" id="orderBox" hidden><p>Order number</p><strong id="orderNo"></strong></div>
+  <p class="countdown" id="countdown" hidden>Opening WhatsApp in <span id="secs">5</span>s</p>
+  <a class="btn" id="waBtn" hidden>Back to WhatsApp</a>
+</main>
+<script>
+  const RESTAURANT_WHATSAPP = '15558262419';          // same number as the order page
+  const POLL_MS = 2500, GIVE_UP_MS = 60000;
+
+  // JWT mode: Fygaro appends custom_reference. Plain mode: the order page stored it before redirecting.
+  const q = new URLSearchParams(location.search);
+  let ref = q.get('custom_reference') || q.get('customReference');
+  try { ref = ref || sessionStorage.getItem('paymentRef'); } catch (_) {}
+
+  const $ = (id) => document.getElementById(id);
+  const set = (cls, title, msg) => {
+    $('icon').className = 'icon ' + cls; $('icon').textContent = cls === 'ok' ? '✓' : cls === 'warn' ? '!' : '';
+    $('title').textContent = title; $('msg').textContent = msg;
+  };
+  const waUrl = () => `https://wa.me/${RESTAURANT_WHATSAPP}`;
+
+  function showWhatsApp(auto) {
+    $('waBtn').href = waUrl(); $('waBtn').hidden = false;
+    if (!auto) return;
+    let s = 5; $('countdown').hidden = false;
+    const t = setInterval(() => { $('secs').textContent = --s; if (s <= 0) { clearInterval(t); location.href = waUrl(); } }, 1000);
+  }
+
+  if (!ref) {
+    // Paid in a different browser/app, so we can't look the order up here. The webhook still confirms it.
+    set('ok', 'Payment received', 'Check WhatsApp. Your order confirmation will arrive there.');
+    showWhatsApp(false);
+  } else {
+    const started = Date.now();
+    (async function poll() {
+      try {
+        const r = await fetch('/api/payments/status/' + encodeURIComponent(ref), { cache: 'no-store' });
+        const d = r.ok ? await r.json() : null;
+        if (d && d.status === 'paid') {
+          try { sessionStorage.removeItem('paymentRef'); } catch (_) {}
+          set('ok', 'Payment received', 'Your order is confirmed and going to the kitchen. A confirmation is on its way to WhatsApp.');
+          $('orderNo').textContent = d.order_number; $('orderBox').hidden = false;
+          return showWhatsApp(true);
+        }
+        if (d && d.status === 'payment_partial') {
+          set('warn', 'Balance still due', 'We received part of your payment. Check WhatsApp for a link to pay the remaining $' + Number(d.remaining).toFixed(2) + '. Your order goes to the kitchen once it is paid.');
+          return showWhatsApp(false);
+        }
+        if (d && d.status === 'payment_hold') {
+          set('warn', 'We need to check your payment', 'Our team is reviewing your payment and will message you on WhatsApp shortly.');
+          return showWhatsApp(false);
+        }
+        if (d && d.status === 'cancelled') {
+          set('warn', 'This order was cancelled', 'Any payment received will be refunded. Check WhatsApp for details.');
+          return showWhatsApp(false);
+        }
+        if (d && d.status === 'expired') {
+          set('warn', 'This order expired', 'Your payment wasn’t completed in time. Please place the order again.');
+          return;
+        }
+      } catch (_) { /* network blip: keep polling */ }
+      if (Date.now() - started > GIVE_UP_MS) {
+        set('warn', 'Still confirming…', 'Nothing is lost. You’ll get a WhatsApp message as soon as your payment is confirmed.');
+        return showWhatsApp(false);
+      }
+      setTimeout(poll, POLL_MS);
+    })();
+  }
+</script>
+</body>
+</html>

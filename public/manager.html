@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Manager · Tap & Serve</title>
+<link rel="stylesheet" href="/panel.css">
+</head><body><main>
+
+<section id="login" class="card" style="margin-top:12vh">
+  <h1>Manager</h1><p class="muted">Enter your personal PIN. Everything you approve is recorded under your name.</p>
+  <label for="pin">PIN</label>
+  <input id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+  <div class="actions"><button id="go">Sign in</button></div>
+  <div class="err" id="loginErr" role="alert"></div>
+</section>
+
+<section id="panel" hidden>
+  <div class="top"><div><h1>Payments</h1><span class="muted" id="who"></span></div><button class="ghost" id="out">Sign out</button></div>
+  <div class="err" id="err" role="alert"></div>
+
+  <h2>Orders waiting for approval</h2>
+  <div id="held"></div>
+
+  <h2>Refunds due</h2>
+  <div id="refunds"></div>
+
+  <h2>Recent activity</h2>
+  <div class="card" id="log"></div>
+</section>
+
+</main>
+<script>
+const $=(i)=>document.getElementById(i);
+const esc=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $$=(n)=>'$'+Number(n||0).toFixed(2);
+let token=null; try{token=sessionStorage.getItem('mgrToken')}catch(_){}
+let timer=null, busy=false;
+
+async function api(method,path,body){
+  const r=await fetch(path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
+  const j=await r.json().catch(()=>({}));
+  if(r.status===401&&token) signOut();
+  if(!r.ok) throw new Error(j.error||'Something went wrong');
+  return j;
+}
+function signOut(){ token=null; clearInterval(timer); try{sessionStorage.removeItem('mgrToken')}catch(_){} $('panel').hidden=true; $('login').hidden=false; }
+$('out').onclick=signOut;
+
+$('go').onclick=async()=>{
+  $('loginErr').textContent='';
+  try{ const j=await api('POST','/api/manager/login',{pin:$('pin').value}); token=j.token; try{sessionStorage.setItem('mgrToken',token)}catch(_){} $('pin').value=''; start(); }
+  catch(e){ $('loginErr').textContent=e.message; }
+};
+$('pin').addEventListener('keydown',e=>{ if(e.key==='Enter') $('go').click(); });
+
+function orderCard(o,kind){
+  const remaining=Math.max(0,Number(o.total_amount)-Number(o.amount_paid||0));
+  const head=`<div class="row" style="border:0;padding:0"><div><b>#${esc(o.order_number)} · ${esc(o.customer_name)}</b><small>${esc(o.phone_number)} · ${esc(new Date(o.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}))}</small></div></div>`;
+  if(kind==='refund') return `<div class="card" data-id="${esc(o.id)}">${head}
+    <p style="margin-top:8px">Refund due: <span class="amt">${$$(o.refund_amount)}</span></p>
+    <label>Note (optional)</label><input class="note" maxlength="300" placeholder="e.g. refunded in Fygaro dashboard">
+    <div class="actions"><button data-act="refund">Mark refund done</button></div></div>`;
+  return `<div class="card" data-id="${esc(o.id)}">${head}
+    <p class="muted" style="margin-top:6px">${esc((o.items||[]).join(', '))}</p>
+    <p style="margin-top:8px">Paid <b>${$$(o.amount_paid)}</b> of <b>${$$(o.total_amount)}</b> · short by <span class="amt">${$$(remaining)}</span></p>
+    ${o.payment_flag?`<p class="muted">${esc(o.payment_flag)}</p>`:''}
+    <label>Reason (required, recorded under your name)</label><input class="note" maxlength="300">
+    <div class="actions"><button data-act="waive">Approve — send to kitchen</button><button class="ghost" data-act="cancel">Cancel &amp; refund</button></div></div>`;
+}
+
+function render(d){
+  $('who').textContent='Signed in as '+d.manager;
+  $('held').innerHTML=d.held.length?d.held.map(o=>orderCard(o,'held')).join(''):'<div class="card muted">Nothing waiting. Customers who pay short get a link to pay the balance automatically.</div>';
+  $('refunds').innerHTML=d.refunds.length?d.refunds.map(o=>orderCard(o,'refund')).join(''):'<div class="card muted">No refunds due.</div>';
+  $('log').innerHTML=d.log.length?d.log.map(l=>`<div class="log"><b>${esc(l.action.replace(/_/g,' '))}</b>${l.order_number?' · #'+esc(l.order_number):''}${l.amount!=null?' · '+$$(l.amount):''}<br><span class="muted">${esc(l.actor_name||l.actor_role||'')} · ${esc(new Date(l.at).toLocaleString())}${l.reason?' · “'+esc(l.reason)+'”':''}</span></div>`).join(''):'<span class="muted">No activity yet.</span>';
+}
+
+async function refresh(){
+  if(busy) return;
+  try{ render(await api('GET','/api/manager/queue')); $('err').textContent=''; }catch(e){ $('err').textContent=e.message; }
+}
+function start(){ $('login').hidden=true; $('panel').hidden=false; refresh(); clearInterval(timer); timer=setInterval(refresh,15000); }
+
+document.addEventListener('click',async(e)=>{
+  const b=e.target.closest('button[data-act]'); if(!b) return;
+  const card=b.closest('.card'), id=card.dataset.id, text=card.querySelector('.note').value.trim(), act=b.dataset.act;
+  if(act!=='refund'&&text.length<5){ $('err').textContent='Please enter a reason (at least 5 characters).'; card.querySelector('.note').focus(); return; }
+  const msg={waive:'Approve this order without full payment? This is recorded under your name.',cancel:'Cancel this order and queue a refund?',refund:'Mark this refund as done?'}[act];
+  if(!confirm(msg)) return;
+  busy=true; b.disabled=true;
+  try{
+    if(act==='waive') await api('POST','/api/manager/waive',{order_id:id,reason:text});
+    if(act==='cancel') await api('POST','/api/manager/cancel-refund',{order_id:id,reason:text});
+    if(act==='refund') await api('POST','/api/manager/refund-done',{order_id:id,note:text});
+    $('err').textContent='';
+  }catch(er){ $('err').textContent=er.message; }
+  busy=false; refresh();
+});
+if(token) start();
+</script></body></html>
