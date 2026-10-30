@@ -376,7 +376,8 @@ app.put('/api/restaurants/:restaurantId/menu/:itemId', requireAdminToken, async 
 app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
         const { restaurantId } = req.params;
-        const { customer_name, phone_number, order_type, items: orderItems, notes } = req.body;
+        const { customer_name, phone_number, order_type, items: orderItems, notes, channel } = req.body;
+        const orderChannel = channel === 'whatsapp' ? 'whatsapp' : 'web';
         
         if (!customer_name || !phone_number || !orderItems || orderItems.length === 0) {
             return res.status(400).json({ 
@@ -500,6 +501,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
         const kdsPayload = {
             id: orderId,
             orderNumber: orderNumber,
+            channel: orderChannel,
             customerName: customer_name,
             phone: phone_number,
             orderType: order_type || 'Walk-in',
