@@ -1079,14 +1079,6 @@
                 return false;
             }
         }
-
-            (async () => {
-        try {
-            const a = JSON.parse(localStorage.getItem('kds_auth') || '{}');
-            const r = await fetch('/api/kds/verify', { headers: { Authorization: 'Bearer ' + a.token } });
-            if (r.status === 401) { localStorage.removeItem('kds_auth'); location.replace('kds-login.html'); }
-        } catch (_) { /* offline: stay signed in */ }
-        })();
         
         // Check auth immediately
         if (!checkAuth()) {
@@ -1120,10 +1112,27 @@
 
     const CONFIG = {
         APPS_SCRIPT_URL: '',  // Not using
-        NODEJS_URL: 'https://www.tapserve.arrilan.com',
+        NODEJS_URL: window.location.origin,   // same address the page was opened from (www or not)
         RESTAURANT_ID: 'c4f64700-25fc-4e0e-98b2-f8c176ae6a47'
       //WHATSAPP_API: '',  // Not using
     };
+
+    // ---- Kitchen token: sent with every request and on the live connection ----
+    function getKdsToken() {
+        try { return (JSON.parse(localStorage.getItem('kds_auth') || '{}')).token || ''; } catch (_) { return ''; }
+    }
+    function kdsSignOut() {
+        localStorage.removeItem('kds_auth');
+        window.location.replace('kds-login.html');
+    }
+    async function authFetch(url, opts = {}) {
+        const res = await fetch(url, {
+            ...opts,
+            headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + getKdsToken() }
+        });
+        if (res.status === 401) kdsSignOut();
+        return res;
+    }
 
     let orders = [];
     let orderCounter = 23;
@@ -1521,7 +1530,7 @@ function playNewOrderSound() {
         try {
             console.log(`🔄 Updating ${orderId} to ${newStatus} in Supabase...`);
             
-            const response = await fetch(`${CONFIG.NODEJS_URL}/api/orders/${orderId}/status`, {
+            const response = await authFetch(`${CONFIG.NODEJS_URL}/api/orders/${orderId}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus })
@@ -1743,18 +1752,18 @@ function playNewOrderSound() {
             console.log('🔄 Fetching orders from:', `${CONFIG.NODEJS_URL}/api/restaurants/${CONFIG.RESTAURANT_ID}/orders`);
             
             // PRIMARY: Try restaurant-specific endpoint
-            let response = await fetch(`${CONFIG.NODEJS_URL}/api/restaurants/${CONFIG.RESTAURANT_ID}/orders`);
+            let response = await authFetch(`${CONFIG.NODEJS_URL}/api/restaurants/${CONFIG.RESTAURANT_ID}/orders`);
             
             // FALLBACK 1: Try status-filtered endpoint
             if (!response.ok) {
                 console.log('⚠️ Trying status-filtered endpoint...');
-                response = await fetch(`${CONFIG.NODEJS_URL}/api/orders?status=new,preparing,ready`);
+                response = await authFetch(`${CONFIG.NODEJS_URL}/api/orders?status=new,preparing,ready`);
             }
             
             // FALLBACK 2: Try all orders
             if (!response.ok) {
                 console.log('⚠️ Trying all orders endpoint...');
-                response = await fetch(`${CONFIG.NODEJS_URL}/api/orders`);
+                response = await authFetch(`${CONFIG.NODEJS_URL}/api/orders`);
             }
             
             if (!response.ok) {
@@ -1871,6 +1880,7 @@ function playNewOrderSound() {
     // ============================================
 
     const socket = io(CONFIG.NODEJS_URL, {
+        auth: (cb) => cb({ token: getKdsToken() }),
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionDelay: 1000,
@@ -1901,6 +1911,7 @@ function playNewOrderSound() {
 
     socket.on('connect_error', (error) => {
         console.error('❌ Socket Connection Error:', error.message);
+        if (error.message === 'unauthorized') kdsSignOut();   // token expired or PIN removed
     });
 
     //===========================================
@@ -2265,6 +2276,9 @@ function playNewOrderSound() {
             updateTimers();
         }
     }, 1000);
+
+    // Re-check the PIN every minute so a removed PIN signs this screen out
+    setInterval(() => { authFetch(`${CONFIG.NODEJS_URL}/api/kds/verify`).catch(() => {}); }, 60000);
 
     console.log('🍜 Tap+Serve KDS Initialized');
 
