@@ -1079,6 +1079,14 @@
                 return false;
             }
         }
+
+            (async () => {
+        try {
+            const a = JSON.parse(localStorage.getItem('kds_auth') || '{}');
+            const r = await fetch('/api/kds/verify', { headers: { Authorization: 'Bearer ' + a.token } });
+            if (r.status === 401) { localStorage.removeItem('kds_auth'); location.replace('kds-login.html'); }
+        } catch (_) { /* offline: stay signed in */ }
+        })();
         
         // Check auth immediately
         if (!checkAuth()) {
