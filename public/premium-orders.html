@@ -1527,6 +1527,7 @@
         customer_name: customerName,
         phone_number: customerPhone,
         order_type: orderType,
+        channel: phoneFromURL ? 'whatsapp' : 'web',
         items: items,
         notes: `${orderType === 'Delivery' ? 'Delivery: ' + deliveryAddress : 'Takeout'} | ${specialNotes || 'No special instructions'}`
       })
