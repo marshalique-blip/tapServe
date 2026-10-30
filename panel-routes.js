@@ -7,6 +7,7 @@ const auth = require('./auth');
 const { getSettings, updateSettings } = require('./settings');
 const { audit } = require('./audit');
 const { runSideEffects } = require('./payments');
+const { forgetPin } = require('./kds-auth');
 
 const cents = (v) => Math.round(Number(v || 0) * 100);
 const money = (c) => `$${(c / 100).toFixed(2)}`;
@@ -222,6 +223,9 @@ function panelRouter(deps) {
   r.post('/api/admin/kds-pins/:id/deactivate', ready, adminOnly, async (req, res) => {
     const { data } = await supabase.from('kds_pins').update({ active: false }).eq('id', req.params.id).select('id, label').maybeSingle();
     if (!data) return res.status(404).json({ error: 'PIN not found' });
+    forgetPin(data.id);
+    // Disconnect any kitchen screen signed in with this PIN, right now
+    if (deps.io) deps.io.sockets.sockets.forEach((sk) => { if (sk.data && sk.data.kdsPin === data.id) sk.disconnect(true); });
     await audit(supabase, { action: 'kds_pin_removed', role: 'admin', name: 'admin', details: { label: data.label, id: data.id } });
     res.json({ ok: true });
   });
