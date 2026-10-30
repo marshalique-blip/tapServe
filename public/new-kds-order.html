@@ -1044,7 +1044,10 @@
             </div>
         </div>
     </div>
-
+    <div id="soundGate" style="position:fixed;inset:0;z-index:5000;background:rgba(10,10,8,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#fff;cursor:pointer;">
+     <div style="font-size:28px;font-weight:800;">Tap to start</div>
+    <div style="color:#A9A38C;">Turns on order sounds for this screen</div>
+    </div>
     <script>
     // ============================================
     // AUTH CHECK - RUNS BEFORE ANYTHING ELSE
@@ -2276,7 +2279,12 @@ function playNewOrderSound() {
         
     });
 
-
+    document.getElementById('soundGate').addEventListener('click', async function () {
+    const ctx = initAudioContext();
+    if (ctx && ctx.state === 'suspended') await ctx.resume();
+    playSound('new');   // short chirp to confirm sound works
+    this.remove();
+    });
 
     </script>
 </body>
