@@ -1,0 +1,106 @@
+/* butta brand pass for the Tap & Serve KDS.
+   Load AFTER the inline <style>: <link rel="stylesheet" href="/kds-brand.css"> */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap');
+
+:root {
+  --butta: #FFE17A;
+  --butta-deep: #FFD43B;
+  --navy: #0B2545;
+  --ink: #15140F;
+  --panel: #1E1D18;
+  --panel-2: #25231C;
+  --line: #2F2D24;
+  --text: #FAF7F0;
+  --muted: #A9A38C;
+  /* status colors stay separate from the brand yellow */
+  --st-new: #4C7DFF;
+  --st-prep: #FF9F1C;
+  --st-ready: #3DDC84;
+  --st-late: #FF5A4D;
+}
+
+body { font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--ink); color: var(--text); }
+:focus-visible { outline: 3px solid var(--butta); outline-offset: 2px; }
+
+/* Header: bigger logo, fewer risky buttons */
+.top-header, .filter-tabs { background: #0E0D0A; border-bottom-color: var(--line); }
+.load-indicator { background: var(--ink); border-bottom-color: var(--line); }
+.logo { height: 40px; max-width: 160px; }
+.time-display { font-weight: 700; font-size: 18px; }
+.icon-btn { border-color: var(--line); color: var(--muted); font-family: inherit; }
+.icon-btn:hover { background: var(--butta); color: var(--ink); border-color: var(--butta); }
+.icon-btn:hover i { color: var(--ink) !important; }
+.icon-btn.active { background: var(--butta); border-color: var(--butta); color: var(--ink); }
+.icon-btn[title="Clear All"], .icon-btn[title="Reset"] { display: none; } /* still in Settings > Danger Zone */
+
+/* Load bar */
+.load-stat-label { color: var(--muted); }
+.load-bar { background: var(--line); }
+.load-bar-fill { background: linear-gradient(90deg, var(--st-ready), var(--st-prep), var(--st-late)); }
+
+/* Tabs */
+.tab-btn { background: var(--panel); border-color: var(--line); color: var(--muted); text-transform: none; font-size: 15px; font-weight: 700; font-family: inherit; letter-spacing: 0; }
+.tab-btn.active { background: var(--butta); color: var(--ink); border-color: var(--butta); }
+.tab-btn.new.active { background: var(--st-new); border-color: var(--st-new); color: #fff; }
+.tab-btn.preparing.active { background: var(--st-prep); border-color: var(--st-prep); color: var(--ink); }
+.tab-btn.ready.active { background: var(--st-ready); border-color: var(--st-ready); color: var(--ink); }
+.tab-btn.whatsapp.active, .tab-btn.phone.active, .tab-btn.walkin.active { background: var(--butta); border-color: var(--butta); color: var(--ink); }
+
+/* Cards */
+.order-card { background: var(--panel); color: var(--text); box-shadow: none; border: 1px solid var(--line); border-radius: 16px; }
+.order-card.locked { border: 3px solid var(--butta); box-shadow: 0 0 0 rgba(0,0,0,0); animation: none; }
+.order-card.new { border-left: 8px solid var(--st-new); }
+.order-card.preparing { border-left: 8px solid var(--st-prep); }
+.order-card.ready { border-left: 8px solid var(--st-ready); }
+.order-card.overdue { border-left: 8px solid var(--st-late); }
+.order-card.whatsapp .order-number, .order-card.phone .order-number, .order-card.walkin .order-number { color: var(--text); }
+.order-header { border-bottom-color: var(--line); }
+.order-number { font-size: 28px; font-weight: 800; color: var(--text); }
+.order-source { color: var(--muted); font-size: 13px; font-weight: 700; }
+.lock-badge { background: var(--butta); color: var(--ink); font-size: 11px; }
+.promise-time { color: var(--muted); font-size: 12px; }
+
+/* Timers */
+.timer { font-size: 24px; font-weight: 800; }
+.timer.normal { background: #1C3326; color: var(--st-ready); }
+.timer.warning { background: #3A2A10; color: var(--st-prep); }
+.timer.critical { background: #3D1714; color: #FF7A6E; }
+
+/* Customer: keep name, drop the phone number from the kitchen view */
+.customer-info { background: var(--panel-2); border-bottom-color: var(--line); }
+.customer-name { color: var(--muted); font-size: 15px; font-weight: 700; }
+.customer-info > div:nth-child(2) { display: none; }
+
+/* Items: bigger, with modifiers and notes standing out */
+.order-item { border-bottom-color: var(--line); }
+.item-name { font-size: 20px; font-weight: 800; color: var(--text); }
+.item-quantity { color: var(--muted); }
+.item-check { width: 28px; height: 28px; font-size: 15px; background: var(--st-ready); color: var(--ink); }
+.item-check.pending { background: #3A382E; color: var(--muted); }
+.item-customizations { font-size: 16px; font-weight: 700; color: var(--butta); padding-left: 38px; }
+.item-notes { font-size: 16px; font-weight: 700; font-style: normal; color: #FFB84D; padding-left: 38px; }
+
+/* Actions: each button matches the status it moves the order to */
+.order-actions { background: #1A1914; border-top-color: var(--line); }
+.action-btn { font-family: inherit; font-size: 16px; font-weight: 800; text-transform: none; padding: 16px; border-radius: 12px; }
+.btn-start { background: var(--st-prep); color: var(--ink); }
+.btn-ready { background: var(--st-ready); color: var(--ink); }
+.btn-complete { background: var(--butta); color: var(--ink); }
+
+/* Empty state */
+.empty-state { color: var(--muted); }
+
+/* Settings modal: cream and navy instead of crimson */
+.modal-content { background: #FFF8E7; }
+.modal-header, .modal-actions { background: #FFF8E7; border-color: #EDE3C6; color: var(--navy); }
+.section-title { color: var(--navy); border-bottom-color: var(--butta-deep); }
+.setting-label { background: #FFF1C8; }
+.setting-label:hover { background: #FFE9A6; }
+.toggle-switch.active { background: var(--navy); }
+.analytics-card { background: #FFF1C8; border-left-color: var(--butta-deep); }
+.setting-btn.primary { background: var(--navy); color: #fff; }
+.modal-actions .action-btn.btn-complete { background: var(--navy); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .order-card.overdue, .timer.critical { animation: none; }
+}
