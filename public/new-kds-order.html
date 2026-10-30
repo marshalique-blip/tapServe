@@ -1810,9 +1810,13 @@ function playNewOrderSound() {
                 
                 // Determine source
                 let source = 'phone';
-                if (dbOrder.order_source) {
+                let kp = dbOrder.kds_payload;
+                if (typeof kp === 'string') { try { kp = JSON.parse(kp); } catch (e) { kp = null; } }
+                if (kp && kp.channel) {
+                    if (kp.channel === 'whatsapp') source = 'whatsapp';
+                } else if (dbOrder.order_source) {
                     const src = dbOrder.order_source.toLowerCase();
-                    if (src.includes('whats')) source = 'whatsapp';
+                    if (src.includes('whats') || src.includes('deliver')) source = 'whatsapp';
                     else if (src.includes('walk')) source = 'walkin';
                 } else if (dbOrder.order_type) {
                     const type = dbOrder.order_type.toLowerCase();
@@ -1983,10 +1987,12 @@ function playNewOrderSound() {
         
         // Determine source type
         let orderSource = 'phone';
-        if (data.orderType) {
+            if (data.channel === 'whatsapp') {
+            orderSource = 'whatsapp';
+        }   else if (!data.channel && data.orderType) {
+        // older orders without a channel
             const type = data.orderType.toLowerCase();
             if (type.includes('delivery')) orderSource = 'whatsapp';
-            else if (type.includes('takeout') || type.includes('pickup')) orderSource = 'phone';
             else if (type.includes('walk')) orderSource = 'walkin';
         }
         
