@@ -10,6 +10,7 @@ const { webhookRouter, statusRouter, startPaymentExpiryJob, newPaymentRef, runSi
 const { panelRouter } = require('./panel-routes');
 const { buildPaymentLink } = require('./fygaro');
 const { getSettings } = require('./settings');
+const { kdsOnly, socketAuth } = require('./kds-auth');
 
 
 // ============================================
@@ -40,6 +41,10 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Kitchen-display gate: routes below use requireKds, and sockets must present a valid kitchen token
+const requireKds = kdsOnly(supabase);
+io.use(socketAuth(supabase));
+
 // Test connectivity
 (async () => {
     const { data, error } = await supabase.from('restaurants').select('*').limit(1);
@@ -61,7 +66,7 @@ const allowedOrigins = [
 app.use(cors({
     origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-    allowedHeaders: ['Content-Type']
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(webhookRouter({ supabase, io, sendWhatsAppMessage }));
@@ -584,7 +589,7 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
 // ============================================
 // 4. UPDATE ORDER STATUS (with WhatsApp notifications)
 // ============================================
-app.put('/api/orders/:orderId/status', async (req, res) => {
+app.put('/api/orders/:orderId/status', requireKds, async (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
     
@@ -666,7 +671,7 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
 // ============================================
 // GET ALL ORDERS FOR A SPECIFIC RESTAURANT (for KDS)
 // ============================================
-app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
+app.get('/api/restaurants/:restaurantId/orders', requireKds, async (req, res) => {
     try {
         const { restaurantId } = req.params;
         const { status } = req.query;
@@ -711,7 +716,7 @@ app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
 // ============================================
 // 5. GET ORDER DETAILS
 // ============================================
-app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
+app.get('/api/restaurants/:restaurantId/orders/:orderId', requireKds, async (req, res) => {
     try {
         const { restaurantId, orderId } = req.params;
         
@@ -737,7 +742,7 @@ app.get('/api/restaurants/:restaurantId/orders/:orderId', async (req, res) => {
 // ============================================
 // 6. GET ALL ORDERS (for KDS)
 // ============================================
-app.get('/api/orders', async (req, res) => {
+app.get('/api/orders', requireKds, async (req, res) => {
     try {
         const { status } = req.query;
         
@@ -767,7 +772,7 @@ app.get('/api/orders', async (req, res) => {
 // ============================================
 // 7. GET RESTAURANT STATISTICS
 // ============================================
-app.get('/api/restaurants/:restaurantId/stats', async (req, res) => {
+app.get('/api/restaurants/:restaurantId/stats', requireKds, async (req, res) => {
     try {
         const { restaurantId } = req.params;
         
