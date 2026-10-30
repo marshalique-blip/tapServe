@@ -175,6 +175,57 @@ function panelRouter(deps) {
     res.json({ ok: true });
   });
 
+  // ---------------------------------------------------------------- Kitchen display (KDS) PINs
+  // Each PIN is 4 digits, has a label (e.g. "Front line", "Closing shift"), and can be removed at any time.
+  const KDS_PIN = /^\d{4}$/;
+
+  r.post('/api/kds/login', ready, json, async (req, res) => {
+    const ip = req.ip, pin = String(req.body?.pin || '');
+    if (auth.isLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
+    const { data: pins, error } = await supabase.from('kds_pins').select('id, label, pin_salt, pin_hash').eq('active', true);
+    if (error) return res.status(500).json({ error: 'Sign-in is unavailable right now' });
+    const p = KDS_PIN.test(pin) ? (pins || []).find((x) => auth.checkPin(pin, x.pin_salt, x.pin_hash)) : null;
+    if (!p) { auth.noteFail(ip); return res.status(401).json({ error: 'Wrong PIN' }); }
+    auth.clearFails(ip);
+    res.json({ token: auth.signToken({ role: 'kds', id: p.id }, 8 * 3600), label: p.label });
+  });
+
+  // The KDS page calls this on load so a removed PIN stops working without waiting for the 8 hours to run out
+  r.get('/api/kds/verify', ready, async (req, res) => {
+    const t = auth.verifyToken(auth.bearer(req));
+    if (!t || t.role !== 'kds') return res.status(401).json({ error: 'Please sign in again' });
+    const { data: p } = await supabase.from('kds_pins').select('id, label, active').eq('id', t.id).maybeSingle();
+    if (!p || !p.active) return res.status(401).json({ error: 'This PIN was removed' });
+    res.set('Cache-Control', 'no-store').json({ ok: true, label: p.label });
+  });
+
+  r.get('/api/admin/kds-pins', ready, adminOnly, async (req, res) => {
+    const { data } = await supabase.from('kds_pins').select('id, label, active, created_at').eq('active', true).order('created_at', { ascending: true });
+    res.set('Cache-Control', 'no-store').json({ pins: data || [] });
+  });
+
+  r.post('/api/admin/kds-pins', ready, adminOnly, json, async (req, res) => {
+    const label = String(req.body?.label || '').trim(), pin = String(req.body?.pin || '');
+    if (!label || label.length > 60) return res.status(400).json({ error: 'Label is required (max 60 characters)' });
+    if (!KDS_PIN.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    const { data: existing } = await supabase.from('kds_pins').select('pin_salt, pin_hash').eq('active', true);
+    if ((existing || []).some((m) => auth.checkPin(pin, m.pin_salt, m.pin_hash))) {
+      return res.status(400).json({ error: 'That PIN is already in use. Choose a different one.' });
+    }
+    const { salt, hash } = auth.hashPin(pin);
+    const { data, error } = await supabase.from('kds_pins').insert({ label, pin_salt: salt, pin_hash: hash }).select('id, label').single();
+    if (error) return res.status(500).json({ error: 'Could not add PIN' });
+    await audit(supabase, { action: 'kds_pin_added', role: 'admin', name: 'admin', details: { label, id: data.id } });
+    res.json({ ok: true, pin: data });
+  });
+
+  r.post('/api/admin/kds-pins/:id/deactivate', ready, adminOnly, async (req, res) => {
+    const { data } = await supabase.from('kds_pins').update({ active: false }).eq('id', req.params.id).select('id, label').maybeSingle();
+    if (!data) return res.status(404).json({ error: 'PIN not found' });
+    await audit(supabase, { action: 'kds_pin_removed', role: 'admin', name: 'admin', details: { label: data.label, id: data.id } });
+    res.json({ ok: true });
+  });
+
   return r;
 }
 

@@ -52,6 +52,15 @@
     <div class="actions"><button id="addM">Add manager</button></div>
     <div class="err" id="mErr" role="alert"></div>
   </div>
+  <div class="card">
+    <h2>Kitchen display PINs</h2>
+    <p class="muted">Staff enter one of these 4-digit PINs to open the kitchen screen. Give each person or shift their own, and remove it when they leave.</p>
+    <div id="kpins"></div>
+    <label for="kLabel">Label</label><input id="kLabel" maxlength="60" autocomplete="off" placeholder="e.g. Front line, Closing shift">
+    <label for="kPin">PIN (4 digits)</label><input id="kPin" inputmode="numeric" maxlength="4" autocomplete="off">
+    <div class="actions"><button id="addK">Add PIN</button></div>
+    <div class="err" id="kErr" role="alert"></div>
+  </div>
   <p class="muted"><a href="/manager.html">Manager screen →</a></p>
 </section>
 
@@ -95,7 +104,7 @@ function render(d){
 }
 
 async function load(){
-  try{ const d=await api('GET','/api/admin/settings'); $('login').hidden=true; $('panel').hidden=false; render(d); loadMgrs(); }
+  try{ const d=await api('GET','/api/admin/settings'); $('login').hidden=true; $('panel').hidden=false; render(d); loadMgrs(); loadKds(); }
   catch(e){ $('loginErr').textContent=e.message; }
 }
 
@@ -121,6 +130,16 @@ $('addM').onclick=async()=>{
   $('mErr').textContent='';
   try{ await api('POST','/api/admin/managers',{name:$('mName').value,pin:$('mPin').value}); $('mName').value=''; $('mPin').value=''; loadMgrs(); }
   catch(e){ $('mErr').textContent=e.message; }
+};
+async function loadKds(){
+  const {pins}=await api('GET','/api/admin/kds-pins');
+  $('kpins').innerHTML=pins.length?pins.map(m=>`<div class="row"><b>${esc(m.label)}</b><button class="ghost" data-id="${esc(m.id)}">Remove</button></div>`).join(''):'<p class="muted">No PINs yet. Add one or nobody can open the kitchen screen.</p>';
+  $('kpins').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ if(!confirm('Remove this PIN? It stops working right away, including on screens already signed in.')) return; try{ await api('POST',`/api/admin/kds-pins/${b.dataset.id}/deactivate`); loadKds(); }catch(e){ $('kErr').textContent=e.message; } });
+}
+$('addK').onclick=async()=>{
+  $('kErr').textContent='';
+  try{ await api('POST','/api/admin/kds-pins',{label:$('kLabel').value,pin:$('kPin').value}); $('kLabel').value=''; $('kPin').value=''; loadKds(); }
+  catch(e){ $('kErr').textContent=e.message; }
 };
 if(token) load();
 </script></body></html>
