@@ -75,6 +75,14 @@
     display: block;
   }
 
+  .wordmark {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -.5px;
+    line-height: 1.1;
+  }
+  .wordmark span { color: var(--butta); }
+
   .subtitle {
     margin-top: 6px;
     font-size: 15px;
@@ -227,6 +235,7 @@
 
 <main class="card" id="card">
   <img class="logo" id="logo" alt="butta">
+  <h1 class="wordmark">tap<span>+</span>serve</h1>
   <p class="subtitle">Kitchen display</p>
 
   <form id="loginForm" autocomplete="off" novalidate>
@@ -266,12 +275,14 @@
 // CONFIGURATION
 // ============================================
 const CONFIG = {
-    SERVER: 'https://tapserve.arrilan.com',
+    // Relative paths keep everything on whichever address the page was opened from
+    // (www or not), so the API call, logo and saved sign-in all share one origin.
+    SERVER: '',
     SESSION_HOURS: 8,
-    REDIRECT_URL: 'https://tapserve.arrilan.com/new-kds-order.html'
+    REDIRECT_URL: '/new-kds-order.html'
 };
 
-// Logo lives in the server's public folder
+// Logo lives in the server's public folder (public/butta_gold.png)
 document.getElementById('logo').src = CONFIG.SERVER + '/butta_gold.png';
 document.getElementById('logo').addEventListener('error', function () { this.style.display = 'none'; });
 
