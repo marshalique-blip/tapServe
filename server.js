@@ -17,6 +17,7 @@ const { kdsOnly, socketAuth } = require('./kds-auth');
 // INITIALIZE APP & SERVER
 // ============================================
 const app = express();
+app.set('trust proxy', 1);   // behind Render's proxy: use the visitor's real IP (for login rate limits)
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {

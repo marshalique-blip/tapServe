@@ -32,17 +32,20 @@ function checkPin(pin, salt, hash) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// 5 failed logins per IP per 10 minutes
+// Failed logins are counted per IP *and* per sign-in area (admin, manager, kitchen),
+// so mistyping at the kitchen can't lock anyone out of admin, and the reverse.
 const fails = new Map();
 const WINDOW = 10 * 60 * 1000, MAX_FAILS = 5;
-function isLimited(ip) {
-  const now = Date.now();
-  const list = (fails.get(ip) || []).filter((t) => now - t < WINDOW);
-  fails.set(ip, list);
-  return list.length >= MAX_FAILS;
+const MAX_BY_SCOPE = { kds: 10 };          // kitchen staff share one network and mistype more often
+const keyOf = (ip, scope) => `${scope}:${ip}`;
+function isLimited(ip, scope = 'default') {
+  const k = keyOf(ip, scope), now = Date.now();
+  const list = (fails.get(k) || []).filter((t) => now - t < WINDOW);
+  fails.set(k, list);
+  return list.length >= (MAX_BY_SCOPE[scope] || MAX_FAILS);
 }
-const noteFail = (ip) => fails.set(ip, [...(fails.get(ip) || []), Date.now()]);
-const clearFails = (ip) => fails.delete(ip);
+const noteFail = (ip, scope = 'default') => { const k = keyOf(ip, scope); fails.set(k, [...(fails.get(k) || []), Date.now()]); };
+const clearFails = (ip, scope = 'default') => fails.delete(keyOf(ip, scope));
 
 const bearer = (req) => (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
 

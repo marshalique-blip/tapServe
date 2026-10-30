@@ -45,12 +45,12 @@ function panelRouter(deps) {
   // ---------------------------------------------------------------- Admin
   r.post('/api/admin/login', ready, json, (req, res) => {
     const ip = req.ip;
-    if (auth.isLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
+    if (auth.isLimited(ip, 'admin')) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
     const expected = process.env.ADMIN_PASSWORD;
     if (!expected || !auth.safeEqual(req.body?.password || '', expected)) {
-      auth.noteFail(ip); return res.status(401).json({ error: 'Wrong password' });
+      auth.noteFail(ip, 'admin'); return res.status(401).json({ error: 'Wrong password' });
     }
-    auth.clearFails(ip);
+    auth.clearFails(ip, 'admin');
     res.json({ token: auth.signToken({ role: 'admin' }, 8 * 3600) });
   });
 
@@ -101,11 +101,11 @@ function panelRouter(deps) {
   // ---------------------------------------------------------------- Manager
   r.post('/api/manager/login', ready, json, async (req, res) => {
     const ip = req.ip, pin = String(req.body?.pin || '');
-    if (auth.isLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
+    if (auth.isLimited(ip, 'manager')) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
     const { data: managers } = await supabase.from('managers').select('id, name, pin_salt, pin_hash').eq('active', true);
     const m = /^\d{4,8}$/.test(pin) ? (managers || []).find((x) => auth.checkPin(pin, x.pin_salt, x.pin_hash)) : null;
-    if (!m) { auth.noteFail(ip); return res.status(401).json({ error: 'Wrong PIN' }); }
-    auth.clearFails(ip);
+    if (!m) { auth.noteFail(ip, 'manager'); return res.status(401).json({ error: 'Wrong PIN' }); }
+    auth.clearFails(ip, 'manager');
     res.json({ token: auth.signToken({ role: 'manager', id: m.id }, 2 * 3600), name: m.name });
   });
 
@@ -182,12 +182,12 @@ function panelRouter(deps) {
 
   r.post('/api/kds/login', ready, json, async (req, res) => {
     const ip = req.ip, pin = String(req.body?.pin || '');
-    if (auth.isLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
+    if (auth.isLimited(ip, 'kds')) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
     const { data: pins, error } = await supabase.from('kds_pins').select('id, label, pin_salt, pin_hash').eq('active', true);
     if (error) return res.status(500).json({ error: 'Sign-in is unavailable right now' });
     const p = KDS_PIN.test(pin) ? (pins || []).find((x) => auth.checkPin(pin, x.pin_salt, x.pin_hash)) : null;
-    if (!p) { auth.noteFail(ip); return res.status(401).json({ error: 'Wrong PIN' }); }
-    auth.clearFails(ip);
+    if (!p) { auth.noteFail(ip, 'kds'); return res.status(401).json({ error: 'Wrong PIN' }); }
+    auth.clearFails(ip, 'kds');
     res.json({ token: auth.signToken({ role: 'kds', id: p.id }, 8 * 3600), label: p.label });
   });
 
