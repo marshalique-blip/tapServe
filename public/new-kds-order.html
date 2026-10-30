@@ -709,6 +709,7 @@
             border-radius: 4px;
         }
     </style>
+    <link rel="stylesheet" href="/kds-brand.css">
 </head>
 <body>
     <div class="top-header">
@@ -1882,7 +1883,7 @@ function playNewOrderSound() {
     });
 
     socket.on('payment-alert', (a) => alert(`Order ${a.orderNumber}: ${a.message}`));
-    
+
     socket.on('connect_error', (error) => {
         console.error('❌ Socket Connection Error:', error.message);
     });
