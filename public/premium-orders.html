@@ -870,6 +870,13 @@
       color: #FFFFFF;
     }
 
+    .track { display: flex; gap: 8px; list-style: none; margin: 6px 0 14px; width: 100%; max-width: 320px; }
+    .track li { flex: 1; text-align: center; font-size: 13px; font-weight: 600; opacity: .5; padding-top: 14px; position: relative; }
+    .track li::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px; border-radius: 99px; background: rgba(255,255,255,.25); }
+    .track li.on { opacity: 1; }
+    .track li.on::before { background: var(--accent); }
+    .done .hint { font-size: 13px; opacity: .75; margin-top: 14px; max-width: 300px; }
+
     /* ============================================ */
     /* POWERED BY butta                             */
     /* The only place the software brand appears.   */
