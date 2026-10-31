@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#123524">
+  <meta name="theme-color" content="#0B2545">
   <title>Order · Ultra Dine</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,16 +17,16 @@
     /* butta stays fixed in the footer strip.       */
     /* ============================================ */
     :root {
-      --brand: #123524;
-      --brand-2: #1C4D35;
-      --accent: #FFB627;
+      --brand: #0B2545;
+      --brand-2: #13386B;
+      --accent: #FFE17A;
       --on-brand: #FFFFFF;
 
-      --bg: #F6F7F2;
+      --bg: #FAF7F0;
       --card: #FFFFFF;
-      --ink: #17201A;
-      --muted: #667068;
-      --line: #E3E7DE;
+      --ink: #1F1D17;
+      --muted: #6E6A5C;
+      --line: #E9E4D6;
       --ok: #1FA463;
       --err: #D64545;
 
@@ -98,9 +98,9 @@
       inset: 0;
       background: linear-gradient(
         180deg,
-        rgba(18, 53, 36, 0.15) 0%,
-        rgba(18, 53, 36, 0.55) 55%,
-        rgba(10, 30, 20, 0.92) 100%
+        rgba(11, 37, 69, 0.15) 0%,
+        rgba(11, 37, 69, 0.55) 55%,
+        rgba(6, 20, 40, 0.92) 100%
       );
       z-index: -1;
     }
@@ -550,7 +550,7 @@
 
     .opt.sel {
       border-color: var(--brand);
-      background: #EEF4EE;
+      background: #EDF2F9;
     }
 
     .opt span:nth-child(2) {
@@ -795,7 +795,7 @@
       background: var(--brand);
       color: var(--on-brand);
       font-weight: 700;
-      box-shadow: 0 10px 30px rgba(18, 53, 36, 0.4);
+      box-shadow: 0 10px 30px rgba(11, 37, 69, 0.4);
     }
 
     .cartbar.on {
@@ -1598,9 +1598,16 @@
     // ============================================
     // PLACE ORDER
     // ============================================
+    function normalizePhone(raw) {
+      let d = String(raw).replace(/\D/g, '');
+      if (d.length === 7) d = '1246' + d;     // local Barbados number
+      else if (d.length === 10) d = '1' + d;  // 246-555-1234
+      return d;
+    }
+
     $('placeBtn').onclick = async () => {
       const name = $('cName').value.trim();
-      const phone = $('cPhone').value.trim();
+      const phone = normalizePhone($('cPhone').value);
       const addr = $('cAddr').value.trim();
       const note = $('cNote').value.trim();
       const err = $('err');
@@ -1609,7 +1616,7 @@
 
       if (closed) return;
       if (!orderType) return err.textContent = 'Choose delivery or takeout.';
-      if (!name || !phone) return err.textContent = 'Add your name and phone number.';
+      if (!name || phone.length < 11) return err.textContent = 'Add your name and a valid phone number.';
       if (orderType === 'Delivery' && !addr) return err.textContent = 'Add a delivery address.';
       if (!cart.length) return err.textContent = 'Your order is empty.';
 
