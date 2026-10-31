@@ -884,6 +884,38 @@ app.post('/api/orders/link-whatsapp', requireAdminToken, async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to link order' });
     }
 });
+
+app.post('/api/orders/active-lookup', requireAdminToken, async (req, res) => {
+    try {
+        const phone = String(req.body.phone || '').replace(/\D/g, '');
+        if (phone.length < 7) {
+            return res.status(400).json({ success: false, error: 'phone is required' });
+        }
+
+        const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+        let query = supabase
+            .from('orders')
+            .select('order_number, status, phone_number, created_at')
+            .in('status', ['new', 'preparing', 'ready'])
+            .gte('created_at', since)
+            .order('created_at', { ascending: false });
+        if (req.body.restaurant_id) query = query.eq('restaurant_id', req.body.restaurant_id);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const mine = (data || []).find(o =>
+            String(o.phone_number || '').replace(/\D/g, '').slice(-7) === phone.slice(-7));
+
+        res.json({
+            success: true,
+            order: mine ? { order_number: mine.order_number, status: mine.status } : null
+        });
+    } catch (err) {
+        console.error('Active lookup error:', err);
+        res.status(500).json({ success: false, error: 'Lookup failed' });
+    }
+});
 // ============================================
 // SOCKET.IO CONNECTIONS
 // ============================================
