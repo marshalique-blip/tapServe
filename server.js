@@ -834,6 +834,55 @@ app.get('/api/restaurants/:restaurantId/stats', requireKds, async (req, res) => 
         res.status(500).json({ error: 'Failed to get stats' });
     }
 });
+
+app.get('/api/track/:orderId', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('orders')
+            .select('order_number, status')
+            .eq('id', req.params.orderId)
+            .single();
+        if (error || !data) return res.status(404).json({ success: false, error: 'Order not found' });
+        res.json({ success: true, order_number: data.order_number, status: data.status });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Failed to track order' });
+    }
+});
+
+app.post('/api/orders/link-whatsapp', requireAdminToken, async (req, res) => {
+    try {
+        const num = String(req.body.order_number || '').trim().toUpperCase();
+        const from = String(req.body.from_phone || '').replace(/\D/g, '');
+        if (!/^UD\d{4}$/.test(num) || !from) {
+            return res.status(400).json({ success: false, error: 'order_number and from_phone are required' });
+        }
+
+        const { data: order, error } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('order_number', num)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (error) throw error;
+        if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+
+        const orderPhone = String(order.phone_number || '').replace(/\D/g, '');
+        if (orderPhone.slice(-7) !== from.slice(-7)) {
+            return res.status(403).json({ success: false, error: 'Phone does not match this order' });
+        }
+        if (UNPAID_STATUSES.includes(order.status)) {
+            return res.status(409).json({ success: false, error: 'Order has not been paid' });
+        }
+
+        const text = `${order.confirmation_message || `Order #${num}`}\n\nCurrent status: ${order.status}`;
+        const sent = await sendWhatsAppMessage(from, text);
+        res.json({ success: sent.success });
+    } catch (err) {
+        console.error('Link WhatsApp error:', err);
+        res.status(500).json({ success: false, error: 'Failed to link order' });
+    }
+});
 // ============================================
 // SOCKET.IO CONNECTIONS
 // ============================================
