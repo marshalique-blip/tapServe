@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Confirming your payment</title>
 <style>
-  :root { --primary:#395a01; --dark:#1A1A2E; --muted:#6B6B6B; --bg:#F7F7F7; --line:#E8E8E8; }
+  :root { --primary:#0B2545; --dark:#1A1A2E; --muted:#6B6B6B; --bg:#F7F7F7; --line:#E8E8E8; }
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; background:var(--bg); color:var(--dark);
          min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
@@ -23,6 +23,11 @@
   .btn { display:block; width:100%; margin-top:18px; padding:16px; background:#25d366; color:#fff; border:0; border-radius:14px; font-size:17px; font-weight:700; cursor:pointer; text-decoration:none; }
   .btn:focus-visible { outline:3px solid var(--dark); outline-offset:2px; }
   [hidden] { display:none !important; }
+  .track { display:flex; gap:8px; list-style:none; margin:16px 0 0; padding:0; }
+  .track li { flex:1; font-size:13px; font-weight:600; color:var(--muted); padding-top:12px; position:relative; }
+  .track li::before { content:''; position:absolute; top:0; left:0; right:0; height:6px; border-radius:99px; background:var(--line); }
+  .track li.on { color:var(--dark); }
+  .track li.on::before { background:var(--primary); }
 </style>
 </head>
 <body>
@@ -31,8 +36,11 @@
   <h1 id="title">Confirming your payment…</h1>
   <p id="msg">This usually takes a few seconds. Please keep this page open.</p>
   <div class="order" id="orderBox" hidden><p>Order number</p><strong id="orderNo"></strong></div>
+  <ol class="track" id="track" hidden><li>Received</li><li>Preparing</li><li>Ready</li></ol>
+
   <p class="countdown" id="countdown" hidden>Opening WhatsApp in <span id="secs">5</span>s</p>
-  <a class="btn" id="waBtn" hidden>Back to WhatsApp</a>
+  <a class="btn" id="payBtn" hidden style="background:var(--primary)">Pay the remaining balance</a>
+  <a class="btn" id="waBtn" hidden>Get updates on WhatsApp</a>
 </main>
 <script>
   const RESTAURANT_WHATSAPP = '15558262419';          // same number as the order page
@@ -48,7 +56,27 @@
     $('icon').className = 'icon ' + cls; $('icon').textContent = cls === 'ok' ? '✓' : cls === 'warn' ? '!' : '';
     $('title').textContent = title; $('msg').textContent = msg;
   };
-  const waUrl = () => `https://wa.me/${RESTAURANT_WHATSAPP}`;
+    let orderNo = '';
+  const waUrl = () => `https://wa.me/${RESTAURANT_WHATSAPP}` +
+    (orderNo ? '?text=' + encodeURIComponent('Hi! My order is ' + orderNo) : '');
+
+  let trackTimer;
+  function startTracking() {
+    $('track').hidden = false;
+    const STEPS = ['new', 'preparing', 'ready'];
+    const tick = async () => {
+      try {
+        const r = await fetch('/api/track/' + encodeURIComponent(ref), { cache: 'no-store' });
+        const d = await r.json();
+        if (!d.success) return;
+        const idx = d.status === 'completed' ? STEPS.length : Math.max(0, STEPS.indexOf(d.status));
+        document.querySelectorAll('#track li').forEach((li, i) => li.classList.toggle('on', i <= idx));
+        if (d.status === 'completed') clearInterval(trackTimer);
+      } catch (_) {}
+    };
+    tick();
+    trackTimer = setInterval(() => { if (!document.hidden) tick(); }, 8000);
+  }
 
   function showWhatsApp(auto) {
     $('waBtn').href = waUrl(); $('waBtn').hidden = false;
@@ -67,14 +95,17 @@
       try {
         const r = await fetch('/api/payments/status/' + encodeURIComponent(ref), { cache: 'no-store' });
         const d = r.ok ? await r.json() : null;
+        if (d && d.order_number) orderNo = d.order_number;
         if (d && d.status === 'paid') {
           try { sessionStorage.removeItem('paymentRef'); } catch (_) {}
           set('ok', 'Payment received', 'Your order is confirmed and going to the kitchen. A confirmation is on its way to WhatsApp.');
           $('orderNo').textContent = d.order_number; $('orderBox').hidden = false;
-          return showWhatsApp(true);
+          startTracking();
+          return showWhatsApp(false);
         }
         if (d && d.status === 'payment_partial') {
-          set('warn', 'Balance still due', 'We received part of your payment. Check WhatsApp for a link to pay the remaining $' + Number(d.remaining).toFixed(2) + '. Your order goes to the kitchen once it is paid.');
+          set('warn', 'Balance still due', 'We received part of your payment. Pay the remaining $' + Number(d.remaining).toFixed(2) + ' to confirm your order. It goes to the kitchen once it is paid.');
+          if (d.pay_url) { $('payBtn').href = d.pay_url; $('payBtn').hidden = false; }
           return showWhatsApp(false);
         }
         if (d && d.status === 'payment_hold') {
