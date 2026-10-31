@@ -1240,7 +1240,7 @@
         badge();
       }
 
-      await Promise.all([loadConfig(), loadMenu()]);
+      await Promise.all([loadConfig(), loadMenu(), settlePayment()]);
     }
 
     async function loadConfig() {
@@ -1671,8 +1671,6 @@
         if (d.payment_url) {
           redirecting = true;
           try { sessionStorage.setItem('paymentRef', d.order.payment_ref); } catch (_) {}
-          cart = [];
-          store('cart', cart);
           location.href = d.payment_url;
           return;
         }
@@ -1730,10 +1728,27 @@
       trackTimer = setInterval(() => { if (!document.hidden) tick(); }, 8000);
     }
 
+    async function settlePayment() {
+      let ref = null;
+      try { ref = sessionStorage.getItem('paymentRef'); } catch (_) {}
+      if (!ref) return;
+      try {
+        const d = await (await fetch(`${API}/api/payments/status/${encodeURIComponent(ref)}`)).json();
+        if (d.status === 'paid') {
+          cart = [];
+          badge();
+          try { sessionStorage.removeItem('paymentRef'); } catch (_) {}
+        } else if (d.status === 'expired' || d.status === 'cancelled') {
+          try { sessionStorage.removeItem('paymentRef'); } catch (_) {}   // keep the cart so they can retry
+        }
+      } catch (_) {}
+    }
+
     // ============================================
     // START
     // ============================================
     init();
+
   </script>
 </body>
 </html>

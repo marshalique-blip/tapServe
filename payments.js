@@ -199,7 +199,11 @@ function statusRouter({ supabase }) {
       : ['payment_partial', 'payment_hold', 'expired', 'cancelled'].includes(data.status) ? data.status
       : data.status === 'payment_mismatch' ? 'payment_hold' : 'pending_payment';
     const remaining = Math.max(0, cents(data.total_amount) - cents(data.amount_paid)) / 100;
-    res.set('Cache-Control', 'no-store').json({ status, order_number: data.order_number, remaining });
+        let pay_url;
+    if (status === 'payment_partial' && remaining > 0) {
+      try { pay_url = buildPaymentLink({ paymentRef: ref, total: remaining }); } catch (_) {}
+    }
+    res.set('Cache-Control', 'no-store').json({ status, order_number: data.order_number, remaining, pay_url });
   });
   return router;
 }
