@@ -434,6 +434,12 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             });
         }
         
+        const { data: requiredCats } = await supabase
+            .from('item_customization_categories')
+            .select('id, name, menu_item_id')
+            .in('menu_item_id', itemIds)
+            .eq('is_required', true);
+
         // Calculate total with customizations
         let subtotal = 0;
         const calculatedItems = [];
@@ -450,17 +456,20 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
             // Add customization prices
             let customizationsTotal = 0;
             const customizationDetails = [];
+            const chosenCategoryIds = new Set();
+
             
             if (orderItem.customizations && orderItem.customizations.length > 0) {
                 const customizationIds = orderItem.customizations.map(c => c.id);
                 
                 const { data: customOptions } = await supabase
                     .from('customization_options')
-                    .select('id, name, price')
+                    .select('id, name, price, category_id')
                     .in('id', customizationIds);
                 
                 if (customOptions) {
                     customOptions.forEach(opt => {
+                        chosenCategoryIds.add(opt.category_id);
                         customizationsTotal += parseFloat(opt.price);
                         customizationDetails.push({
                             id: opt.id,
@@ -471,6 +480,13 @@ app.post('/api/restaurants/:restaurantId/orders', async (req, res) => {
                 }
             }
             
+            const missingGroup = (requiredCats || []).find(c =>
+                c.menu_item_id === menuItem.id && !chosenCategoryIds.has(c.id));
+                if (missingGroup) {
+                return res.status(400).json({ error: `Please choose ${missingGroup.name} for ${menuItem.name}` });
+            }
+
+
             const itemTotal = (itemPrice + customizationsTotal) * quantity;
             subtotal += itemTotal;
             
