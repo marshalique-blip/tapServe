@@ -1089,8 +1089,14 @@
   <section class="done" id="done">
     <h2>Order confirmed</h2>
     <div class="no" id="oNo"></div>
-    <p>We’ll message you on WhatsApp as it’s prepared.</p>
-    <button class="btn" id="waBtn">Open WhatsApp</button>
+        <ol class="track" id="track">
+      <li>Received</li>
+      <li>Preparing</li>
+      <li>Ready</li>
+    </ol>
+    <p id="trackMsg">We’ve got your order.</p>
+    <p class="hint">Want updates on WhatsApp? Tap below, then press send.</p>
+    <button class="btn" id="waBtn">Get updates on WhatsApp</button>
     <button class="btn ghost" onclick="location.reload()">Order again</button>
 
     <!-- POWERED BY butta (confirmation footer) -->
@@ -1678,6 +1684,7 @@
         doneNo = d.order.order_number;
         $('oNo').textContent = doneNo;
         $('done').classList.add('on');
+        startTracking(d.order.id);
 
       } catch (_) {
         err.textContent = 'Connection problem. Your order is still here, so try again.';
@@ -1691,9 +1698,37 @@
       }
     };
 
-    $('waBtn').onclick = () => {
-      location.href = 'https://wa.me/' + RESTAURANT_WHATSAPP.replace(/\D/g, '');
+        $('waBtn').onclick = () => {
+      const text = doneNo ? `Hi! My order is ${doneNo}` : 'Hi!';
+      location.href = 'https://wa.me/' + RESTAURANT_WHATSAPP.replace(/\D/g, '') +
+        '?text=' + encodeURIComponent(text);
     };
+
+    // Live tracker on the confirmed screen
+    let trackTimer = null;
+    const STEPS = ['new', 'preparing', 'ready'];
+    const TRACK_MSG = {
+      new: 'We’ve got your order and the kitchen will start soon.',
+      preparing: 'Your order is being prepared.',
+      ready: 'Your order is ready!',
+      completed: 'Enjoy your meal!'
+    };
+
+    function startTracking(orderId) {
+      clearInterval(trackTimer);
+      const tick = async () => {
+        try {
+          const d = await (await fetch(`${API}/api/track/${orderId}`)).json();
+          if (!d.success) return;
+          const idx = d.status === 'completed' ? STEPS.length : Math.max(0, STEPS.indexOf(d.status));
+          document.querySelectorAll('#track li').forEach((li, i) => li.classList.toggle('on', i <= idx));
+          $('trackMsg').textContent = TRACK_MSG[d.status] || TRACK_MSG.new;
+          if (d.status === 'completed') clearInterval(trackTimer);
+        } catch (_) {}
+      };
+      tick();
+      trackTimer = setInterval(() => { if (!document.hidden) tick(); }, 8000);
+    }
 
     // ============================================
     // START
