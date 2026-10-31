@@ -840,7 +840,7 @@ app.get('/api/track/:orderId', async (req, res) => {
         const { data, error } = await supabase
             .from('orders')
             .select('order_number, status')
-            .eq('id', req.params.orderId)
+            .eq(req.params.orderId.startsWith('pay_') ? 'payment_ref' : 'id', req.params.orderId)
             .single();
         if (error || !data) return res.status(404).json({ success: false, error: 'Order not found' });
         res.json({ success: true, order_number: data.order_number, status: data.status });
@@ -877,6 +877,7 @@ app.post('/api/orders/link-whatsapp', requireAdminToken, async (req, res) => {
 
         const text = `${order.confirmation_message || `Order #${num}`}\n\nCurrent status: ${order.status}`;
         const sent = await sendWhatsAppMessage(from, text);
+        if (sent.success) await supabase.from('orders').update({ whatsapp_sent: true }).eq('id', order.id);
         res.json({ success: sent.success });
     } catch (err) {
         console.error('Link WhatsApp error:', err);
